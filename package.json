@@ -1,0 +1,36 @@
+{
+  "name": "messagent",
+  "version": "0.1.0",
+  "repository": "https://github.com/seancheung/messagent.git",
+  "author": "sean <theoxuanx@gmail.com>",
+  "license": "MIT",
+  "main": "lib/commonjs/index.js",
+  "module": "lib/module/index.js",
+  "types": "lib/types",
+  "files": [
+    "lib"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "rollup -c --environment NODE_ENV:production",
+    "postbuild": "tsc --declaration --emitDeclarationOnly --declarationDir ./lib/types",
+    "prepare": "npm run build",
+    "dev": "rollup -c -w"
+  },
+  "devDependencies": {
+    "@rollup/plugin-json": "^4.1.0",
+    "@rollup/plugin-typescript": "^8.5.0",
+    "@types/node": "^18.7.18",
+    "@typescript-eslint/eslint-plugin": "^5.37.0",
+    "@typescript-eslint/parser": "^5.37.0",
+    "eslint": "^8.23.1",
+    "rollup": "^2.79.0",
+    "rollup-plugin-delete": "^2.0.0",
+    "rollup-plugin-terser": "^7.0.2",
+    "tslib": "^2.4.0",
+    "typescript": "^4.8.3"
+  }
+}
