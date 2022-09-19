@@ -8,7 +8,7 @@ export class CallerAgent<T extends IObject>
   extends Agent<CallerBroker>
   implements ProxyHandler<T>, PromiseLike<any>
 {
-  protected readonly path: string[];
+  protected readonly path: Array<string | number>;
 
   constructor(options: CallerAgent.Options) {
     super(options.key, options.broker);
@@ -71,7 +71,9 @@ export class CallerAgent<T extends IObject>
   }
 
   [Symbol.toStringTag] = () => {
-    return this.path.join(".");
+    return `CallerAgent(${this.path
+      .map((e) => (typeof e === "number" ? `[${e}]` : e))
+      .join(".")})`;
   };
 }
 
@@ -79,6 +81,6 @@ export namespace CallerAgent {
   export interface Options {
     key: string;
     broker: CallerBroker;
-    path?: string[];
+    path?: Array<string | number>;
   }
 }

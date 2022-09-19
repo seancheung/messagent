@@ -77,4 +77,50 @@ describe("test agents", () => {
     expect(res).toBeInstanceOf(Promise);
     expect(await res).toEqual(value);
   });
+
+  test("test deep", async () => {
+    const agentKey = "test-deep";
+    const value = 1;
+    class NestedCallee {
+      id = value;
+    }
+    class TestCallee {
+      item: NestedCallee = new NestedCallee();
+    }
+    calleeBroker.injectAgent(agentKey, new TestCallee(), true);
+    const agent = callerBroker.useAgent<TestCallee>(agentKey);
+    const prop = agent.item.id;
+    expect(await prop).toEqual(value);
+  });
+
+  test("test batch", async () => {
+    const agentKey = "test-batch";
+    class NestedCallee {
+      id: number;
+      constructor(id: number) {
+        this.id = id;
+      }
+    }
+    class TestCallee {
+      items: NestedCallee[] = [];
+      spawn(id: number) {
+        return new NestedCallee(id);
+      }
+    }
+    const original = new TestCallee();
+    calleeBroker.injectAgent(agentKey, original, true);
+    const count = await callerBroker.execAgent<TestCallee, number>(
+      agentKey,
+      (agent) => {
+        const item1 = agent.spawn(1);
+        const item2 = agent.spawn(2);
+        agent.items.push(item1, item2);
+        item2.id = 3;
+        return agent.items.length;
+      }
+    );
+    expect(count).toEqual(2);
+    expect(count).toEqual(original.items.length);
+    expect(original.items[1].id).toEqual(3);
+  });
 });

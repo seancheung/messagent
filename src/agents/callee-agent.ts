@@ -52,7 +52,7 @@ export class CalleeAgent<T extends IObject> extends Agent<CalleeBroker> {
       return Reflect.get(p, c, p);
     }, this.target);
     const propKey = payload[0][payload[0].length - 1];
-    Reflect.set(target, propKey, payload[1]);
+    return Reflect.set(target, propKey, payload[1]);
   };
 
   protected onApply: CalleeBroker.MessageHandler = (
@@ -81,6 +81,61 @@ export class CalleeAgent<T extends IObject> extends Agent<CalleeBroker> {
     return Reflect.apply(func, thisArg, payload[1]);
   };
 
+  protected onBatch: CalleeBroker.MessageHandler = (
+    _,
+    payload: Agent.BatchPayload
+  ) => {
+    const ilList: any[] = [];
+    for (const op of payload) {
+      switch (op.type) {
+        case "get":
+          {
+            const target = op.il != null ? ilList[op.il] : this.target;
+            let value = Reflect.get(target, op.prop, target);
+            if (typeof value === "function") {
+              value = value.bind(target);
+            }
+            ilList.push(value);
+          }
+          break;
+        case "set":
+          {
+            let value = op.value;
+            if (Agent.isILValue(value)) {
+              value = ilList[value.__il];
+            }
+            const target = op.il != null ? ilList[op.il] : this.target;
+            Reflect.set(target, op.prop, value);
+            ilList.push(undefined);
+          }
+          break;
+        case "apply":
+          {
+            const target = op.il != null ? ilList[op.il] : this.target;
+            if (!target) {
+              throw new Error("Invalid call operation");
+            }
+            const args = op.args?.map((arg) => {
+              if (Agent.isILValue(arg)) {
+                arg = ilList[arg.__il];
+              }
+              return arg;
+            });
+            const value = Reflect.apply(target, undefined, args);
+            ilList.push(value);
+          }
+          break;
+        case "return": {
+          let value = op.value;
+          if (Agent.isILValue(value)) {
+            value = ilList[value.__il];
+          }
+          return value;
+        }
+      }
+    }
+  };
+
   /**
    * Inject target as agent
    */
@@ -88,6 +143,7 @@ export class CalleeAgent<T extends IObject> extends Agent<CalleeBroker> {
     this.broker.setHandler(this.getType, this.onGet);
     this.broker.setHandler(this.setType, this.onSet);
     this.broker.setHandler(this.applyType, this.onApply);
+    this.broker.setHandler(this.batchType, this.onBatch);
   }
 
   /**

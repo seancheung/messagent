@@ -1,6 +1,7 @@
 import { IAdapter, IObject } from "../adapter";
-import { DeepAgent } from "../agent";
+import { Agent, DeepAgent } from "../agent";
 import { CallerAgent } from "../agents/caller-agent";
+import { TrackAgent } from "../agents/track-agent";
 import { Broker } from "../broker";
 import {
   BrokerMessage,
@@ -142,6 +143,30 @@ export class CallerBroker extends Broker {
         key,
       })
     );
+  }
+
+  /**
+   * Exec agent operations in batch
+   * @param key Agent key
+   * @param func Exec function
+   * @returns Function return value
+   */
+  async execAgent<T extends IObject, R>(
+    key: string,
+    func: (agent: T) => R
+  ): Promise<R> {
+    const ops: Agent.BatchOperation[] = [];
+    const agent = new TrackAgent<T>({
+      ops,
+      key,
+      broker: this,
+    });
+    const res: any = agent.resolveValue(func(new Proxy({} as T, agent)));
+    ops.push({
+      type: "return",
+      value: res,
+    });
+    return await agent;
   }
 
   /**
