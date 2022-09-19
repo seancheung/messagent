@@ -51,7 +51,7 @@ export class CalleeAgent<T extends IObject> extends Agent<CalleeBroker> {
       }
       return Reflect.get(p, c, p);
     }, this.target);
-    const propKey = payload[payload.length - 1];
+    const propKey = payload[0][payload[0].length - 1];
     Reflect.set(target, propKey, payload[1]);
   };
 

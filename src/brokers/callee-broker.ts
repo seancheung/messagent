@@ -1,5 +1,5 @@
-import { CalleeAgent } from "src/agents";
 import { IAdapter, IObject } from "../adapter";
+import { CalleeAgent } from "../agents";
 import { Broker } from "../broker";
 import {
   BrokerMessage,
@@ -71,10 +71,10 @@ export class CalleeBroker extends Broker {
   }
 
   /**
-   * Raise an event
+   * Publish an event
    * @param msg Message to send
    */
-  send(msg: BrokerMessage): void {
+  publish(msg: BrokerMessage): void {
     this.adapter.send({ ...msg });
   }
 
@@ -184,9 +184,15 @@ export class CalleeBroker extends Broker {
     plugin(this);
   }
 
-  dispose(): void {
+  /**
+   * Reset data
+   */
+  reset() {
     this.handlers.clear();
     this.agents.clear();
+  }
+
+  dispose(): void {
     super.dispose();
   }
 }

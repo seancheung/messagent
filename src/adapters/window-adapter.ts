@@ -52,6 +52,6 @@ export class WindowAdapter implements IAdapter {
   }
 
   send(data: JSONObject): void {
-    this._target.postMessage({ __ns: this._namespace, payload: data });
+    this._target.postMessage({ __ns: this._namespace, payload: data }, "*");
   }
 }

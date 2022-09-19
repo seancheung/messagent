@@ -3,7 +3,7 @@ import { IAdapter } from "./adapter";
 export abstract class Broker {
   constructor(protected readonly adapter: IAdapter) {
     this.adapter = adapter;
-    this.adapter.attach(this.onAdapterMessage);
+    this.adapter.attach(this.onAdapterMessage.bind(this));
   }
 
   /**

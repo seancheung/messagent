@@ -1,5 +1,5 @@
 import { IAdapter, IObject } from "../adapter";
-import { DeepAgent, ShallowAgent } from "../agent";
+import { DeepAgent } from "../agent";
 import { CallerAgent } from "../agents/caller-agent";
 import { Broker } from "../broker";
 import {
@@ -134,31 +134,26 @@ export class CallerBroker extends Broker {
    * Get agent
    * @param key Agent key
    */
-  useAgent<T extends IObject>(key: string): ShallowAgent<T>;
-  /**
-   * Get agent
-   * @param key Agent key
-   * @param deep Allow deep access
-   */
-  useAgent<T extends IObject>(key: string, deep: false): ShallowAgent<T>;
-  /**
-   * Get agent
-   * @param key Agent key
-   * @param deep Allow deep access
-   */
-  useAgent<T extends IObject>(key: string, deep: true): DeepAgent<T>;
-  useAgent<T extends IObject>(key: string, deep?: boolean): any {
-    return new CallerAgent<T>({
-      broker: this,
-      key,
-      deep,
-    });
+  useAgent<T extends IObject>(key: string): DeepAgent<T> {
+    return new Proxy(
+      {} as any,
+      new CallerAgent<T>({
+        broker: this,
+        key,
+      })
+    );
   }
 
-  dispose() {
+  /**
+   * Reset data
+   */
+  reset() {
     this.eventSubscribers.clear();
     this.responseHandlers.clear();
     this.registrar.reset();
+  }
+
+  dispose() {
     super.dispose();
   }
 }
