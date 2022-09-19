@@ -1,7 +1,6 @@
 import { IAdapter, IObject } from "../adapter";
-import { Agent, DeepAgent } from "../agent";
-import { CallerAgent } from "../agents/caller-agent";
-import { TrackAgent } from "../agents/track-agent";
+import { DeepAgent } from "../agent";
+import { BatchedCallerAgent, DeferredCallerAgent } from "../agents";
 import { Broker } from "../broker";
 import {
   BrokerMessage,
@@ -132,41 +131,48 @@ export class CallerBroker extends Broker {
   }
 
   /**
-   * Get agent
+   * Get an deferred agent
    * @param key Agent key
    */
-  useAgent<T extends IObject>(key: string): DeepAgent<T> {
-    return new Proxy(
-      {} as any,
-      new CallerAgent<T>({
-        broker: this,
-        key,
-      })
-    );
-  }
-
+  useAgent<T extends IObject>(key: string): DeepAgent<T>;
   /**
-   * Exec agent operations in batch
+   * Run operations with batched agent
    * @param key Agent key
-   * @param func Exec function
+   * @param func Batch function
    * @returns Function return value
    */
-  async execAgent<T extends IObject, R>(
+  useAgent<T extends IObject, R>(
     key: string,
     func: (agent: T) => R
-  ): Promise<R> {
-    const ops: Agent.BatchOperation[] = [];
-    const agent = new TrackAgent<T>({
-      ops,
+  ): Promise<R>;
+  useAgent<T extends IObject, R>(
+    key: string,
+    func?: (agent: T) => R
+  ): DeepAgent<T> | Promise<R> {
+    if (!func) {
+      return new Proxy(
+        {} as any,
+        new DeferredCallerAgent<T>({
+          broker: this,
+          key,
+        })
+      );
+    }
+    const instructions: BatchedCallerAgent.Instruction[] = [];
+    const agent = new BatchedCallerAgent<T>({
       key,
       broker: this,
+      instructions,
     });
-    const res: any = agent.resolveValue(func(new Proxy({} as T, agent)));
-    ops.push({
-      type: "return",
-      value: res,
-    });
-    return await agent;
+    const res: any = BatchedCallerAgent.Instruction.normalizeValue(
+      func(new Proxy({} as T, agent))
+    );
+    const instruction: BatchedCallerAgent.Instruction.Return = {
+      t: "return",
+      v: res,
+    };
+    instructions.push(instruction);
+    return Promise.resolve(agent);
   }
 
   /**

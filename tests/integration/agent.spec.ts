@@ -1,7 +1,8 @@
 import {
+  BatchedCallerAgent,
   CalleeBroker,
-  CallerAgent,
   CallerBroker,
+  DeferredCallerAgent,
   WindowAdapter,
 } from "../../src";
 
@@ -44,7 +45,7 @@ describe("test agents", () => {
     calleeBroker.injectAgent(agentKey, new TestCallee());
     const agent = callerBroker.useAgent<TestCallee>(agentKey);
     const prop = agent.id;
-    expect(prop).toBeInstanceOf(CallerAgent);
+    expect(prop).toBeInstanceOf(DeferredCallerAgent);
     expect(await prop).toEqual(value);
   });
 
@@ -74,7 +75,7 @@ describe("test agents", () => {
     calleeBroker.injectAgent(agentKey, new TestCallee());
     const agent = callerBroker.useAgent<TestCallee>(agentKey);
     const res = agent.run();
-    expect(res).toBeInstanceOf(Promise);
+    expect(res).toBeInstanceOf(DeferredCallerAgent);
     expect(await res).toEqual(value);
   });
 
@@ -109,9 +110,10 @@ describe("test agents", () => {
     }
     const original = new TestCallee();
     calleeBroker.injectAgent(agentKey, original, true);
-    const count = await callerBroker.execAgent<TestCallee, number>(
+    const count = await callerBroker.useAgent<TestCallee, number>(
       agentKey,
       (agent) => {
+        expect(agent).toBeInstanceOf(BatchedCallerAgent);
         const item1 = agent.spawn(1);
         const item2 = agent.spawn(2);
         agent.items.push(item1, item2);

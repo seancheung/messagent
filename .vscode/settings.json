@@ -2,6 +2,9 @@
   "files.exclude": {
     "node_modules/": true
   },
+  "search.exclude": {
+    "package-lock.json": true
+  },
   "editor.formatOnSave": true,
   "[typescript]": {
     "editor.codeActionsOnSave": {
