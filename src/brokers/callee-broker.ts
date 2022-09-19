@@ -1,4 +1,5 @@
-import { IAdapter } from "../adapter";
+import { CalleeAgent } from "src/agents";
+import { IAdapter, IObject } from "../adapter";
 import { Broker } from "../broker";
 import {
   BrokerMessage,
@@ -13,7 +14,11 @@ import { formatError, nextTick } from "../utils";
  * Called by `CallerBroker`
  */
 export class CalleeBroker extends Broker {
-  protected readonly handlers = new Map<string, CalleeBroker.MessageHandler>();
+  protected readonly handlers = new Map<
+    string,
+    CalleeBroker.MessageRawHandler
+  >();
+  protected readonly agents = new Map<string, CalleeAgent<IObject>>();
 
   constructor(options: CalleeBroker.Options) {
     super(options.adapter);
@@ -74,12 +79,13 @@ export class CalleeBroker extends Broker {
   }
 
   /**
-   * Add a handler for the given message type
+   * Set a raw handler for the given message type
    * @param type Message type
    * @param handler Message handler
    * @returns Remove handler function
+   * @description This will override previously set handler of the same type
    */
-  addHandler(type: string, handler: CalleeBroker.MessageHandler) {
+  setRawHandler(type: string, handler: CalleeBroker.MessageRawHandler) {
     this.handlers.set(type, handler);
     return () => {
       if (this.handlers.get(type) === handler) {
@@ -89,16 +95,17 @@ export class CalleeBroker extends Broker {
   }
 
   /**
-   * Add a safe handler for the given message type
+   * Set a wrapped handler for the given message type
    * @param type Message type
    * @param handler Message handler
    * @returns Remove handler function
    * @description
+   * - This will override previously set handler of the same type
    * - support async
    * - support return value as reply data
    * - errors will be caught and sent
    */
-  setSafeHandler(type: string, handler: CalleeBroker.SafeMessageHandler) {
+  setHandler(type: string, handler: CalleeBroker.MessageHandler) {
     this.handlers.set(type, async (ctx, payload) => {
       let res: any;
       let error: any;
@@ -119,6 +126,57 @@ export class CalleeBroker extends Broker {
   }
 
   /**
+   * Remove handler of the given type
+   * @param type Message type
+   */
+  removeHandler(type: string) {
+    this.handlers.delete(type);
+  }
+
+  /**
+   * Inject agent
+   * @param key Agent key
+   * @param target Agent target
+   */
+  injectAgent<T extends IObject>(key: string, target: T): void;
+  /**
+   * Inject agent
+   * @param key Agent key
+   * @param target Agent target
+   * @param deep Allow deep access
+   */
+  injectAgent<T extends IObject>(key: string, target: T, deep: true): void;
+  /**
+   * Inject agent
+   * @param key Agent key
+   * @param target Agent target
+   * @param deep Allow deep access
+   */
+  injectAgent<T extends IObject>(key: string, target: T, deep: false): void;
+  injectAgent<T extends IObject>(key: string, target: T, deep?: boolean): void {
+    if (this.agents.has(key)) {
+      throw new Error("Agent key conflict");
+    }
+    const agent = new CalleeAgent(target, {
+      broker: this,
+      key,
+      deep,
+    });
+    agent.inject();
+    this.agents.set(key, agent);
+  }
+
+  /**
+   * Eject agent
+   * @param key Agent key
+   * @returns `true` if an agent with the given key has been ejected
+   */
+  ejectAgent(key: string): boolean {
+    this.agents.get(key)?.eject();
+    return this.agents.delete(key);
+  }
+
+  /**
    * Add plugin
    * @param plugin Plugin
    */
@@ -128,6 +186,7 @@ export class CalleeBroker extends Broker {
 
   dispose(): void {
     this.handlers.clear();
+    this.agents.clear();
     super.dispose();
   }
 }
@@ -166,11 +225,11 @@ export namespace CalleeBroker {
      */
     readonly req?: RequestContext;
   }
-  export type MessageHandler = (
+  export type MessageRawHandler = (
     ctx: MessageHandlerContext,
     payload?: any
   ) => void;
-  export type SafeMessageHandler = (
+  export type MessageHandler = (
     ctx: MessageHandlerContext,
     payload?: any
   ) => any;

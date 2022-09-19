@@ -2,6 +2,7 @@
   "compilerOptions": {
     "target": "es2016",
     "module": "ESNext",
+    "lib": ["DOM", "ESNext.WeakRef"],
     "moduleResolution": "node",
     "esModuleInterop": true,
     "skipLibCheck": true,

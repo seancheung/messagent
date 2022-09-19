@@ -1,12 +1,7 @@
 import { IAdapter } from "./adapter";
 
 export abstract class Broker {
-  /**
-   * Message adapter
-   */
-  protected readonly adapter: IAdapter;
-
-  constructor(adapter: IAdapter) {
+  constructor(protected readonly adapter: IAdapter) {
     this.adapter = adapter;
     this.adapter.attach(this.onAdapterMessage);
   }

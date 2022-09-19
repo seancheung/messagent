@@ -8,26 +8,28 @@ export class WindowAdapter implements IAdapter {
 
   /**
    * Create WindowAdapter instance
-   * @param target Message target window object
-   */
-  constructor(target: Window);
-  /**
-   * Create WindowAdapter instance
-   * @param target Message target window object
-   * @param self Self window object
-   */
-  constructor(target: Window, self: Window);
-  /**
-   * Create WindowAdapter instance
-   * @param target Message target window object
-   * @param self Self window object
    * @param ns Namespace
+   * @param target Message target window object
    */
-  constructor(target: Window, self: Window, ns: string);
-  constructor(target: Window, self?: Window, ns?: string) {
+  constructor(ns: string, target: Window);
+  /**
+   * Create WindowAdapter instance
+   * @param ns Namespace
+   * @param target Message target window object
+   * @param self Self window object
+   */
+  constructor(ns: string, target: Window, self: Window);
+  /**
+   * Create WindowAdapter instance
+   * @param ns Namespace
+   * @param target Message target window object
+   * @param self Self window object
+   */
+  constructor(ns: string, target: Window, self: Window);
+  constructor(ns: string, target: Window, self?: Window) {
     this._target = target;
     this._self = self || window;
-    this._namespace = ns || Math.random().toString(36).slice(2);
+    this._namespace = ns;
   }
 
   attach(dispatch: Dispatch): void {

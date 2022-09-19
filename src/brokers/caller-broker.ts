@@ -1,4 +1,6 @@
-import { IAdapter } from "../adapter";
+import { IAdapter, IObject } from "../adapter";
+import { DeepAgent, ShallowAgent } from "../agent";
+import { CallerAgent } from "../agents/caller-agent";
 import { Broker } from "../broker";
 import {
   BrokerMessage,
@@ -126,6 +128,31 @@ export class CallerBroker extends Broker {
         Array.from(listeners).filter((e) => e !== handler)
       );
     };
+  }
+
+  /**
+   * Get agent
+   * @param key Agent key
+   */
+  useAgent<T extends IObject>(key: string): ShallowAgent<T>;
+  /**
+   * Get agent
+   * @param key Agent key
+   * @param deep Allow deep access
+   */
+  useAgent<T extends IObject>(key: string, deep: false): ShallowAgent<T>;
+  /**
+   * Get agent
+   * @param key Agent key
+   * @param deep Allow deep access
+   */
+  useAgent<T extends IObject>(key: string, deep: true): DeepAgent<T>;
+  useAgent<T extends IObject>(key: string, deep?: boolean): any {
+    return new CallerAgent<T>({
+      broker: this,
+      key,
+      deep,
+    });
   }
 
   dispose() {

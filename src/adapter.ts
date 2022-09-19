@@ -21,3 +21,5 @@ export type JSONObject = { [member: string]: JSONValue };
 export interface JSONArray extends Array<JSONValue> {}
 
 export type Dispatch = (msg: JSONObject) => void;
+
+export type IObject = { [x: string | number]: any };
