@@ -118,6 +118,7 @@ describe("test agents", () => {
       spawn(id: number) {
         return new NestedCallee(id);
       }
+      Item = NestedCallee;
     }
     const original = new TestCallee();
     calleeBroker.injectAgent(agentKey, original, true);
@@ -126,14 +127,18 @@ describe("test agents", () => {
       (agent) => {
         expect(agent).toBeInstanceOf(BatchedCallerAgent);
         const item1 = agent.spawn(1);
+        console.log(item1);
         const item2 = agent.spawn(2);
         agent.items.push(item1, item2);
         item2.id = 3;
+        const item3 = new agent.Item(4);
+        agent.items.push(item3);
         return agent.items.length;
       }
     );
-    expect(count).toEqual(2);
+    expect(count).toEqual(3);
     expect(count).toEqual(original.items.length);
     expect(original.items[1].id).toEqual(3);
+    expect(original.items[2].id).toEqual(4);
   });
 });

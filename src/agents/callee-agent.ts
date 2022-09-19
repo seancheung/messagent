@@ -74,6 +74,12 @@ export class CalleeAgent<T extends IObject> extends Agent<CalleeBroker> {
           // TODO: async?
           value = Reflect.apply(target, undefined, revive(instruction.a));
           break;
+        case "del":
+          Reflect.deleteProperty(target, instruction.p);
+          break;
+        case "ctor":
+          value = Reflect.construct(target, revive(instruction.a));
+          break;
         default:
           throw new Error("Unknown instruction type");
       }

@@ -85,6 +85,39 @@ export class BatchedCallerAgent<T extends IObject>
     );
   }
 
+  deleteProperty(target: T, p: string | symbol): boolean {
+    if (typeof p === "symbol") {
+      return Reflect.deleteProperty(this, p);
+    }
+    const instruction: BatchedCallerAgent.Instruction.Del = {
+      t: "del",
+      il: this.il,
+      p,
+    };
+    this.instructions.push(instruction);
+    return true;
+  }
+
+  construct(target: T, argArray: any[], newTarget: Function): object {
+    const instruction: BatchedCallerAgent.Instruction.Ctor = {
+      t: "ctor",
+      il: this.il,
+      a:
+        argArray &&
+        (BatchedCallerAgent.Instruction.normalizeValue(argArray) as any),
+    };
+    this.instructions.push(instruction);
+    return new Proxy(
+      CallableTarget,
+      new BatchedCallerAgent({
+        key: this.key,
+        broker: this.broker,
+        instructions: this.instructions,
+        il: this.instructions.length,
+      })
+    );
+  }
+
   getPrototypeOf(target: T): object {
     return Reflect.getPrototypeOf(this);
   }
@@ -118,6 +151,8 @@ export namespace BatchedCallerAgent {
     | Instruction.Get
     | Instruction.Set
     | Instruction.Apply
+    | Instruction.Del
+    | Instruction.Ctor
     | Instruction.Return;
   export namespace Instruction {
     export type ILPrimitive = string | number | boolean | null;
@@ -141,6 +176,16 @@ export namespace BatchedCallerAgent {
     }
     export interface Apply {
       t: "apply";
+      il: number;
+      a?: ILValue[];
+    }
+    export interface Del {
+      t: "del";
+      il: number;
+      p: string | number;
+    }
+    export interface Ctor {
+      t: "ctor";
       il: number;
       a?: ILValue[];
     }
