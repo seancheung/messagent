@@ -81,17 +81,28 @@ describe("test agents", () => {
 
   test("test deep", async () => {
     const agentKey = "test-deep";
-    const value = 1;
     class NestedCallee {
-      id = value;
+      id: number;
+      constructor(id: number) {
+        this.id = id;
+      }
     }
     class TestCallee {
-      item: NestedCallee = new NestedCallee();
+      item: NestedCallee = new NestedCallee(1);
+      items = [new NestedCallee(2)];
+      spawn(id: number) {
+        this.items.push(new NestedCallee(id));
+      }
     }
     calleeBroker.injectAgent(agentKey, new TestCallee(), true);
     const agent = callerBroker.useAgent<TestCallee>(agentKey);
-    const prop = agent.item.id;
-    expect(await prop).toEqual(value);
+    expect(await agent.item.id).toEqual(1);
+    expect(await agent.item).toEqual({ id: 1 });
+    expect(await agent.items).toBeInstanceOf(Array);
+    await agent.spawn(3);
+    expect(await agent.items.length).toEqual(2);
+    await agent.items.splice(0, await agent.items.length);
+    expect(await agent.items.length).toEqual(0);
   });
 
   test("test batch", async () => {

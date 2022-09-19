@@ -1,4 +1,4 @@
-import { IObject, JSONValue } from "./adapter";
+import { IObject } from "./adapter";
 import { Broker } from "./broker";
 
 export abstract class Agent<TBroker extends Broker> {
@@ -22,20 +22,15 @@ export abstract class Agent<TBroker extends Broker> {
   }
 }
 
-export type ShallowAgent<T extends IObject> = {
-  [K in keyof T]: T[K] extends JSONValue
-    ? Promise<T[K]>
-    : T[K] extends (...args: infer P) => infer R
-    ? (...args: P) => Promise<R>
-    : never;
-};
-
 export type DeepAgent<T extends IObject> = {
-  [K in keyof T]: T[K] extends JSONValue
+  [K in keyof T]: T[K] extends (...args: infer P) => infer R
+    ? (...args: P) => R extends Promise<any> ? R : Promise<R>
+    : T[K] extends string | number | boolean | bigint | undefined | null
     ? Promise<T[K]>
-    : T[K] extends (...args: infer P) => infer R
-    ? (...args: P) => Promise<R>
-    : T[K] extends IObject
-    ? DeepAgent<T[K]>
-    : never;
+    : T[K] extends Array<any>
+    ? Promise<T[K]> &
+        DeepAgent<{
+          [P in keyof T[K]]: P extends number ? never : T[K][P];
+        }>
+    : Promise<T[K]> & DeepAgent<T[K]>;
 };
