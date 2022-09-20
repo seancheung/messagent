@@ -1,6 +1,7 @@
 import { Dispatch, IAdapter, JSONObject } from '../adapter';
 
 export class WindowAdapter implements IAdapter {
+  public debugging?: boolean;
   private readonly _target: Window;
   private readonly _self: Window;
   private readonly _namespace: string;
