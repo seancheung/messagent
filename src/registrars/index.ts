@@ -1,1 +1,1 @@
-export * from "./default-registrar";
+export * from './default-registrar';

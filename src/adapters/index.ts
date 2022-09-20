@@ -1,1 +1,1 @@
-export * from "./window-adapter";
+export * from './window-adapter';

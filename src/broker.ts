@@ -1,4 +1,4 @@
-import { IAdapter } from "./adapter";
+import { IAdapter } from './adapter';
 
 export abstract class Broker {
   constructor(protected readonly adapter: IAdapter) {

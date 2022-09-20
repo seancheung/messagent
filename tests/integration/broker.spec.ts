@@ -1,13 +1,13 @@
-import { CalleeBroker, CallerBroker, WindowAdapter } from "../../src";
+import { CalleeBroker, CallerBroker, WindowAdapter } from '../../src';
 
-describe("test brokers", () => {
+describe('test brokers', () => {
   let calleeBroker: CalleeBroker;
   let callerBroker: CallerBroker;
 
   beforeAll(() => {
-    const frame = document.createElement("iframe");
+    const frame = document.createElement('iframe');
     document.body.appendChild(frame);
-    const ns = "test";
+    const ns = 'test';
     calleeBroker = new CalleeBroker({
       adapter: new WindowAdapter(ns, frame.contentWindow!, window),
     });
@@ -15,7 +15,7 @@ describe("test brokers", () => {
       adapter: new WindowAdapter(
         ns,
         frame.contentWindow!.parent,
-        frame.contentWindow!
+        frame.contentWindow!,
       ),
     });
   });
@@ -30,9 +30,9 @@ describe("test brokers", () => {
     callerBroker?.dispose();
   });
 
-  test("test send", (done) => {
-    const type = "test-send";
-    const payload = { prop: "value" };
+  test('test send', (done) => {
+    const type = 'test-send';
+    const payload = { prop: 'value' };
     calleeBroker.setHandler(type, (_, msg) => {
       expect(msg).toEqual(payload);
       done();
@@ -40,9 +40,9 @@ describe("test brokers", () => {
     callerBroker.send({ type, payload });
   });
 
-  test("test request", (done) => {
-    const type = "test-req";
-    const payload = { prop: "value" };
+  test('test request', (done) => {
+    const type = 'test-req';
+    const payload = { prop: 'value' };
     const data = { success: true };
     calleeBroker.setHandler(type, (_, msg) => {
       expect(msg).toEqual(payload);
@@ -54,9 +54,9 @@ describe("test brokers", () => {
     });
   });
 
-  test("test request error", (done) => {
-    const type = "test-req-err";
-    const msg = "failed";
+  test('test request error', (done) => {
+    const type = 'test-req-err';
+    const msg = 'failed';
     calleeBroker.setHandler(type, () => {
       throw new Error(msg);
     });
@@ -67,8 +67,8 @@ describe("test brokers", () => {
     });
   });
 
-  test("test request raw", (done) => {
-    const type = "test-req-raw";
+  test('test request raw', (done) => {
+    const type = 'test-req-raw';
     const data = { success: true };
     calleeBroker.setRawHandler(type, (ctx) => {
       ctx.req!.end(undefined, data);
@@ -79,9 +79,9 @@ describe("test brokers", () => {
     });
   });
 
-  test("test subscribe", (done) => {
-    const type = "test-sub";
-    const payload = { prop: "value" };
+  test('test subscribe', (done) => {
+    const type = 'test-sub';
+    const payload = { prop: 'value' };
     callerBroker.subscribe(type, (data) => {
       expect(data).toEqual(payload);
       done();

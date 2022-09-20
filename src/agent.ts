@@ -1,10 +1,10 @@
-import { IObject } from "./adapter";
-import { Broker } from "./broker";
+import { IObject } from './adapter';
+import { Broker } from './broker';
 
 export abstract class Agent<TBroker extends Broker> {
   constructor(
     protected readonly key: string,
-    protected readonly broker: TBroker
+    protected readonly broker: TBroker,
   ) {}
 
   /**

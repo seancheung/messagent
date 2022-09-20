@@ -1,14 +1,14 @@
-import { IAdapter, IObject } from "../adapter";
-import { CalleeAgent } from "../agents";
-import { Broker } from "../broker";
+import { IAdapter, IObject } from '../adapter';
+import { CalleeAgent } from '../agents';
+import { Broker } from '../broker';
 import {
   BrokerMessage,
   BrokerRequest,
   BrokerResponse,
   isEvent,
   isRequest,
-} from "../message";
-import { formatError, nextTick } from "../utils";
+} from '../message';
+import { formatError, nextTick } from '../utils';
 
 /**
  * Called by `CallerBroker`
@@ -45,7 +45,7 @@ export class CalleeBroker extends Broker {
       req = {
         end: (error?: Error, payload?: any) => {
           if (isDone) {
-            throw new Error("request already closed");
+            throw new Error('request already closed');
           }
           this.reply(id, error, payload);
           isDone = true;
@@ -155,7 +155,7 @@ export class CalleeBroker extends Broker {
   injectAgent<T extends IObject>(key: string, target: T, deep: false): void;
   injectAgent<T extends IObject>(key: string, target: T, deep?: boolean): void {
     if (this.agents.has(key)) {
-      throw new Error("Agent key conflict");
+      throw new Error('Agent key conflict');
     }
     const agent = new CalleeAgent(target, {
       broker: this,
@@ -233,11 +233,11 @@ export namespace CalleeBroker {
   }
   export type MessageRawHandler = (
     ctx: MessageHandlerContext,
-    payload?: any
+    payload?: any,
   ) => void;
   export type MessageHandler = (
     ctx: MessageHandlerContext,
-    payload?: any
+    payload?: any,
   ) => any;
   export type Plugin = (broker: CalleeBroker) => void;
 }

@@ -1,6 +1,6 @@
-import { IObject } from "../adapter";
-import { Agent } from "../agent";
-import { CallerBroker } from "../brokers";
+import { IObject } from '../adapter';
+import { Agent } from '../agent';
+import { CallerBroker } from '../brokers';
 
 const CallableTarget = function () {};
 
@@ -15,15 +15,15 @@ export class DeferredCallerAgent<T extends IObject>
     this.instructions = options.instructions || [];
   }
 
-  get(target: T, p: string | symbol, receiver: any) {
-    if (typeof p === "symbol") {
+  get(target: T, p: string | symbol) {
+    if (typeof p === 'symbol') {
       return Reflect.get(this, p, this);
     }
-    if (p === "then") {
+    if (p === 'then') {
       return this.then.bind(this);
     }
     const instruction: DeferredCallerAgent.Instruction.Get = {
-      t: "get",
+      t: 'get',
       p,
     };
     return new Proxy(
@@ -32,16 +32,16 @@ export class DeferredCallerAgent<T extends IObject>
         key: this.key,
         broker: this.broker,
         instructions: [...this.instructions, instruction],
-      })
+      }),
     );
   }
 
-  set(target: T, p: string | symbol, newValue: any, receiver: any): boolean {
-    if (typeof p === "symbol") {
+  set(target: T, p: string | symbol, newValue: any): boolean {
+    if (typeof p === 'symbol') {
       return Reflect.set(this, p, newValue, this);
     }
     const instruction: DeferredCallerAgent.Instruction.Set = {
-      t: "set",
+      t: 'set',
       p,
       v: newValue,
     };
@@ -54,7 +54,7 @@ export class DeferredCallerAgent<T extends IObject>
 
   apply(target: T, thisArg: any, argArray: any[]) {
     const instruction: DeferredCallerAgent.Instruction.Apply = {
-      t: "apply",
+      t: 'apply',
       a: argArray,
     };
     return new Proxy(
@@ -63,17 +63,17 @@ export class DeferredCallerAgent<T extends IObject>
         key: this.key,
         broker: this.broker,
         instructions: [...this.instructions, instruction],
-      })
+      }),
     );
   }
 
-  getPrototypeOf(target: T): object {
+  getPrototypeOf(): object {
     return Reflect.getPrototypeOf(this);
   }
 
   then<TResult1 = any, TResult2 = never>(
     onfulfilled?: (value: any) => TResult1 | PromiseLike<TResult1>,
-    onrejected?: (reason: any) => TResult2 | PromiseLike<TResult2>
+    onrejected?: (reason: any) => TResult2 | PromiseLike<TResult2>,
   ): PromiseLike<TResult1 | TResult2> {
     return this.broker
       .request({
@@ -97,16 +97,16 @@ export namespace DeferredCallerAgent {
     | Instruction.Apply;
   export namespace Instruction {
     export interface Get {
-      t: "get";
+      t: 'get';
       p: string | number;
     }
     export interface Set {
-      t: "set";
+      t: 'set';
       p: string | number;
       v: any;
     }
     export interface Apply {
-      t: "apply";
+      t: 'apply';
       a?: any[];
     }
   }

@@ -4,16 +4,16 @@ import {
   CallerBroker,
   DeferredCallerAgent,
   WindowAdapter,
-} from "../../src";
+} from '../../src';
 
-describe("test agents", () => {
+describe('test agents', () => {
   let calleeBroker: CalleeBroker;
   let callerBroker: CallerBroker;
 
   beforeAll(() => {
-    const frame = document.createElement("iframe");
+    const frame = document.createElement('iframe');
     document.body.appendChild(frame);
-    const ns = "test";
+    const ns = 'test';
     calleeBroker = new CalleeBroker({
       adapter: new WindowAdapter(ns, frame.contentWindow!, window),
     });
@@ -21,7 +21,7 @@ describe("test agents", () => {
       adapter: new WindowAdapter(
         ns,
         frame.contentWindow!.parent,
-        frame.contentWindow!
+        frame.contentWindow!,
       ),
     });
   });
@@ -36,8 +36,8 @@ describe("test agents", () => {
     callerBroker?.dispose();
   });
 
-  test("test get", async () => {
-    const agentKey = "test-get";
+  test('test get', async () => {
+    const agentKey = 'test-get';
     const value = 1;
     class TestCallee {
       id = value;
@@ -49,8 +49,8 @@ describe("test agents", () => {
     expect(await prop).toEqual(value);
   });
 
-  test("test set", async () => {
-    const agentKey = "test-set";
+  test('test set', async () => {
+    const agentKey = 'test-set';
     const value = 1;
     class TestCallee {
       id: number;
@@ -64,8 +64,8 @@ describe("test agents", () => {
     expect(original.id).toEqual(value);
   });
 
-  test("test call", async () => {
-    const agentKey = "test-call";
+  test('test call', async () => {
+    const agentKey = 'test-call';
     const value = 1;
     class TestCallee {
       run() {
@@ -79,8 +79,8 @@ describe("test agents", () => {
     expect(await res).toEqual(value);
   });
 
-  test("test deep", async () => {
-    const agentKey = "test-deep";
+  test('test deep', async () => {
+    const agentKey = 'test-deep';
     class NestedCallee {
       id: number;
       constructor(id: number) {
@@ -105,8 +105,8 @@ describe("test agents", () => {
     expect(await agent.items.length).toEqual(0);
   });
 
-  test("test batch", async () => {
-    const agentKey = "test-batch";
+  test('test batch', async () => {
+    const agentKey = 'test-batch';
     class NestedCallee {
       id: number;
       constructor(id: number) {
@@ -127,14 +127,13 @@ describe("test agents", () => {
       (agent) => {
         expect(agent).toBeInstanceOf(BatchedCallerAgent);
         const item1 = agent.spawn(1);
-        console.log(item1);
         const item2 = agent.spawn(2);
         agent.items.push(item1, item2);
         item2.id = 3;
         const item3 = new agent.Item(4);
         agent.items.push(item3);
         return agent.items.length;
-      }
+      },
     );
     expect(count).toEqual(3);
     expect(count).toEqual(original.items.length);

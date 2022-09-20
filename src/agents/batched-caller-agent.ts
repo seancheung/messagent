@@ -1,9 +1,9 @@
-import { IObject } from "../adapter";
-import { Agent } from "../agent";
-import { CallerBroker } from "../brokers";
+import { IObject } from '../adapter';
+import { Agent } from '../agent';
+import { CallerBroker } from '../brokers';
 
 const CallableTarget = function () {};
-const ILSymbol = Symbol("IL");
+const ILSymbol = Symbol('IL');
 
 export class BatchedCallerAgent<T extends IObject>
   extends Agent<CallerBroker>
@@ -24,18 +24,18 @@ export class BatchedCallerAgent<T extends IObject>
     };
   }
 
-  get(target: T, p: string | symbol, receiver: any) {
-    if (typeof p === "symbol") {
+  get(target: T, p: string | symbol) {
+    if (typeof p === 'symbol') {
       return Reflect.get(this, p, this);
     }
-    if (p === "then") {
+    if (p === 'then') {
       return this.then.bind(this);
     }
-    if (p === "toJSON") {
+    if (p === 'toJSON') {
       return this.toJSON.bind(this);
     }
     const instruction: BatchedCallerAgent.Instruction.Get = {
-      t: "get",
+      t: 'get',
       il: this.il,
       p,
     };
@@ -47,16 +47,16 @@ export class BatchedCallerAgent<T extends IObject>
         broker: this.broker,
         instructions: this.instructions,
         il: this.instructions.length,
-      })
+      }),
     );
   }
 
-  set(target: T, p: string | symbol, newValue: any, receiver: any): boolean {
-    if (typeof p === "symbol") {
+  set(target: T, p: string | symbol, newValue: any): boolean {
+    if (typeof p === 'symbol') {
       return Reflect.set(this, p, newValue, this);
     }
     const instruction: BatchedCallerAgent.Instruction.Set = {
-      t: "set",
+      t: 'set',
       il: this.il,
       p,
       v: BatchedCallerAgent.Instruction.normalizeValue(newValue),
@@ -67,7 +67,7 @@ export class BatchedCallerAgent<T extends IObject>
 
   apply(target: T, thisArg: any, argArray: any[]) {
     const instruction: BatchedCallerAgent.Instruction.Apply = {
-      t: "apply",
+      t: 'apply',
       il: this.il,
       a:
         argArray &&
@@ -81,16 +81,16 @@ export class BatchedCallerAgent<T extends IObject>
         broker: this.broker,
         instructions: this.instructions,
         il: this.instructions.length,
-      })
+      }),
     );
   }
 
   deleteProperty(target: T, p: string | symbol): boolean {
-    if (typeof p === "symbol") {
+    if (typeof p === 'symbol') {
       return Reflect.deleteProperty(this, p);
     }
     const instruction: BatchedCallerAgent.Instruction.Del = {
-      t: "del",
+      t: 'del',
       il: this.il,
       p,
     };
@@ -98,9 +98,9 @@ export class BatchedCallerAgent<T extends IObject>
     return true;
   }
 
-  construct(target: T, argArray: any[], newTarget: Function): object {
+  construct(target: T, argArray: any[]): object {
     const instruction: BatchedCallerAgent.Instruction.Ctor = {
-      t: "ctor",
+      t: 'ctor',
       il: this.il,
       a:
         argArray &&
@@ -114,17 +114,17 @@ export class BatchedCallerAgent<T extends IObject>
         broker: this.broker,
         instructions: this.instructions,
         il: this.instructions.length,
-      })
+      }),
     );
   }
 
-  getPrototypeOf(target: T): object {
+  getPrototypeOf(): object {
     return Reflect.getPrototypeOf(this);
   }
 
   then<TResult1 = any, TResult2 = never>(
     onfulfilled?: (value: any) => TResult1 | PromiseLike<TResult1>,
-    onrejected?: (reason: any) => TResult2 | PromiseLike<TResult2>
+    onrejected?: (reason: any) => TResult2 | PromiseLike<TResult2>,
   ): PromiseLike<TResult1 | TResult2> {
     return this.broker
       .request({
@@ -161,40 +161,58 @@ export namespace BatchedCallerAgent {
     }
     export type ILValue = ILPrimitive | ILIntermediate | ILObject | ILArray;
     export type ILObject = { [x: string | number]: ILValue };
-    export interface ILArray extends Array<ILValue> {}
+    export type ILArray = Array<ILValue>;
 
     export interface Get {
-      t: "get";
+      t: 'get';
       il: number;
       p: string | number;
     }
     export interface Set {
-      t: "set";
+      t: 'set';
       il: number;
       p: string | number;
       v: ILValue;
     }
     export interface Apply {
-      t: "apply";
+      t: 'apply';
       il: number;
       a?: ILValue[];
     }
     export interface Del {
-      t: "del";
+      t: 'del';
       il: number;
       p: string | number;
     }
     export interface Ctor {
-      t: "ctor";
+      t: 'ctor';
       il: number;
       a?: ILValue[];
     }
     export interface Return {
-      t: "return";
+      t: 'return';
       v?: ILValue;
     }
     export function normalizeValue(raw: unknown): ILValue {
       return JSON.parse(JSON.stringify(raw));
+    }
+    export function isILIntermediate(value: unknown): value is ILIntermediate {
+      return (
+        value != null &&
+        typeof value === 'object' &&
+        Reflect.getPrototypeOf(value) === Object.prototype &&
+        Reflect.ownKeys(value).length === 1 &&
+        typeof (value as ILIntermediate).__il === 'number'
+      );
+    }
+    export function reviveIL(ils: any[], value: unknown): any {
+      if (isILIntermediate(value)) {
+        return ils[value.__il];
+      }
+      if (Array.isArray(value)) {
+        return value.map((e) => reviveIL(ils, e));
+      }
+      return value;
     }
   }
 }

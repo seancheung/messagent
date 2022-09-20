@@ -1,10 +1,10 @@
-import { Dispatch, IAdapter, JSONObject } from "../adapter";
+import { Dispatch, IAdapter, JSONObject } from '../adapter';
 
 export class WindowAdapter implements IAdapter {
   private readonly _target: Window;
   private readonly _self: Window;
   private readonly _namespace: string;
-  private _attached: (e: MessageEvent) => void;
+  private _attached?: (e: MessageEvent) => void;
 
   /**
    * Create WindowAdapter instance
@@ -41,17 +41,18 @@ export class WindowAdapter implements IAdapter {
         dispatch(e.data.payload);
       }
     };
-    this._self.addEventListener("message", this._attached);
+    this._self.addEventListener('message', this._attached);
   }
 
   detach(): void {
     if (this._attached == null) {
       return;
     }
-    this._self.removeEventListener("message", this._attached);
+    this._self.removeEventListener('message', this._attached);
+    this._attached = null;
   }
 
   send(data: JSONObject): void {
-    this._target.postMessage({ __ns: this._namespace, payload: data }, "*");
+    this._target.postMessage({ __ns: this._namespace, payload: data }, '*');
   }
 }

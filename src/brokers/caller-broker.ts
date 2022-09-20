@@ -1,17 +1,17 @@
-import { IAdapter, IObject } from "../adapter";
-import { DeepAgent } from "../agent";
-import { BatchedCallerAgent, DeferredCallerAgent } from "../agents";
-import { Broker } from "../broker";
+import { IAdapter, IObject } from '../adapter';
+import { DeepAgent } from '../agent';
+import { BatchedCallerAgent, DeferredCallerAgent } from '../agents';
+import { Broker } from '../broker';
 import {
   BrokerMessage,
   BrokerRequest,
   BrokerResponse,
   isEvent,
   isResponse,
-} from "../message";
-import { IRegistrar } from "../registrar";
-import { DefaultRegistrar } from "../registrars/default-registrar";
-import { nextTick } from "../utils";
+} from '../message';
+import { IRegistrar } from '../registrar';
+import { DefaultRegistrar } from '../registrars/default-registrar';
+import { nextTick } from '../utils';
 
 /**
  * Calls `CalleeBroker`
@@ -46,9 +46,9 @@ export class CallerBroker extends Broker {
       let error: Error;
       if (msg.error) {
         error = new Error();
-        if (typeof msg.error === "string") {
+        if (typeof msg.error === 'string') {
           error.name = msg.error;
-        } else if (typeof msg.error === "object") {
+        } else if (typeof msg.error === 'object') {
           error.name = msg.error.name;
           error.message = msg.error.message;
         }
@@ -99,7 +99,7 @@ export class CallerBroker extends Broker {
             } else if (!streaming) {
               resolve(payload);
             }
-          }
+          },
         );
       });
     }
@@ -125,7 +125,7 @@ export class CallerBroker extends Broker {
       const listeners = this.eventSubscribers.get(type);
       this.eventSubscribers.set(
         type,
-        Array.from(listeners).filter((e) => e !== handler)
+        Array.from(listeners).filter((e) => e !== handler),
       );
     };
   }
@@ -143,11 +143,11 @@ export class CallerBroker extends Broker {
    */
   useAgent<T extends IObject, R>(
     key: string,
-    func: (agent: T) => R
+    func: (agent: T) => R,
   ): Promise<R>;
   useAgent<T extends IObject, R>(
     key: string,
-    func?: (agent: T) => R
+    func?: (agent: T) => R,
   ): DeepAgent<T> | Promise<R> {
     if (!func) {
       return new Proxy(
@@ -155,7 +155,7 @@ export class CallerBroker extends Broker {
         new DeferredCallerAgent<T>({
           broker: this,
           key,
-        })
+        }),
       );
     }
     const instructions: BatchedCallerAgent.Instruction[] = [];
@@ -165,10 +165,10 @@ export class CallerBroker extends Broker {
       instructions,
     });
     const res: any = BatchedCallerAgent.Instruction.normalizeValue(
-      func(new Proxy({} as T, agent))
+      func(new Proxy({} as T, agent)),
     );
     const instruction: BatchedCallerAgent.Instruction.Return = {
-      t: "return",
+      t: 'return',
       v: res,
     };
     instructions.push(instruction);
