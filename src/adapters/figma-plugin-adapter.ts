@@ -43,8 +43,7 @@ export namespace FigmaPluginAdapter {
     }
 
     send(data: JSONObject): void {
-      this.debugging &&
-        console.log(`${this._namespace}.sandbox.received`, data);
+      this.debugging && console.log(`${this._namespace}.sandbox.send`, data);
       figma.ui.postMessage({ __ns: this._namespace, payload: data });
     }
   }
@@ -70,13 +69,11 @@ export namespace FigmaPluginAdapter {
         return;
       }
       this._attached = (e) => {
-        if (e.data.pluginMessage?.__ns === this._namespace) {
+        const msg = e.data.pluginMessage;
+        if (msg?.__ns === this._namespace) {
           this.debugging &&
-            console.log(
-              `${this._namespace}.browser.received`,
-              e.data.pluginMessage.payload,
-            );
-          dispatch(e.data.payload);
+            console.log(`${this._namespace}.browser.received`, msg.payload);
+          dispatch(msg.payload);
         }
       };
       window.addEventListener('message', this._attached);

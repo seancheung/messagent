@@ -194,6 +194,9 @@ export namespace BatchedCallerAgent {
       v?: ILValue;
     }
     export function normalizeValue(raw: unknown): ILValue {
+      if (typeof raw === 'function' && !(raw instanceof BatchedCallerAgent)) {
+        throw new Error('Argument cannot be function');
+      }
       return raw == null ? raw : JSON.parse(JSON.stringify(raw));
     }
     export function isILIntermediate(value: unknown): value is ILIntermediate {

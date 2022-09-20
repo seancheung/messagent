@@ -40,6 +40,9 @@ export class DeferredCallerAgent<T extends IObject>
     if (typeof p === 'symbol') {
       return Reflect.set(this, p, newValue, this);
     }
+    if (typeof newValue === 'function') {
+      throw new Error('Argument cannot be function');
+    }
     const instruction: DeferredCallerAgent.Instruction.Set = {
       t: 'set',
       p,
@@ -57,6 +60,9 @@ export class DeferredCallerAgent<T extends IObject>
       t: 'apply',
       a: argArray,
     };
+    if (argArray?.some((e) => typeof e === 'function')) {
+      throw new Error('Argument cannot be function');
+    }
     return new Proxy(
       CallableTarget,
       new DeferredCallerAgent({
