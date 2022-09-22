@@ -143,11 +143,11 @@ export class CallerBroker extends Broker {
    */
   useAgent<T extends IObject, R>(
     key: string,
-    func: (agent: T) => R,
+    func: (agent: T, helpers: CallerBroker.BatchAgentHelper) => R,
   ): Promise<R>;
   useAgent<T extends IObject, R>(
     key: string,
-    func?: (agent: T) => R,
+    func?: (agent: T, helpers?: CallerBroker.BatchAgentHelper) => R,
   ): DeepAgent<T> | Promise<R> {
     if (!func) {
       return new Proxy(
@@ -159,20 +159,31 @@ export class CallerBroker extends Broker {
       );
     }
     const instructions: BatchedCallerAgent.Instruction[] = [];
+    const pointer: Writabe<BatchedCallerAgent.Pointer> = { done: false };
     const agent = new BatchedCallerAgent<T>({
       key,
       broker: this,
+      pointer,
       instructions,
     });
-    const res: any = BatchedCallerAgent.Instruction.normalizeValue(
-      func(new Proxy({} as T, agent)),
-    );
-    const instruction: BatchedCallerAgent.Instruction.Return = {
-      t: 'return',
-      v: res,
+    const proxy = new Proxy({} as T, agent);
+    const helpers: CallerBroker.BatchAgentHelper = {
+      sum: BatchedCallerAgent.Instruction.MathOp.sum.bind(agent),
+      subtract: BatchedCallerAgent.Instruction.MathOp.subtract.bind(agent),
+      multiply: BatchedCallerAgent.Instruction.MathOp.multiply.bind(agent),
+      divide: BatchedCallerAgent.Instruction.MathOp.divide.bind(agent),
     };
-    instructions.push(instruction);
-    return Promise.resolve(agent);
+    return Promise.resolve(func(proxy, helpers)).then((res) => {
+      if (res !== undefined) {
+        const instruction: BatchedCallerAgent.Instruction.Return = {
+          t: 'return',
+          v: BatchedCallerAgent.Instruction.normalizeValue(res),
+        };
+        instructions.push(instruction);
+      }
+      pointer.done = true;
+      return Promise.resolve(agent);
+    });
   }
 
   /**
@@ -202,4 +213,10 @@ export namespace CallerBroker {
   }
   export type EventHandler = (payload?: any) => void;
   export type ResponseHandler = (error?: Error, payload?: any) => void;
+  export interface BatchAgentHelper {
+    sum(a: number, b: number): number;
+    subtract(a: number, b: number): number;
+    multiply(a: number, b: number): number;
+    divide(a: number, b: number): number;
+  }
 }

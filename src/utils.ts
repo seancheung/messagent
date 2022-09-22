@@ -15,3 +15,7 @@ export function formatError(error: string | Error) {
   }
   return error;
 }
+
+declare global {
+  type Writabe<T> = { -readonly [P in keyof T]: T[P] };
+}

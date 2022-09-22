@@ -41,7 +41,7 @@ export class CalleeAgent<T extends IObject> extends Agent<CalleeBroker> {
     }, this.target);
   };
 
-  protected onBatched: CalleeBroker.MessageHandler = (
+  protected onBatched: CalleeBroker.MessageHandler = async (
     _,
     payload: BatchedCallerAgent.Instruction[],
   ) => {
@@ -72,6 +72,27 @@ export class CalleeAgent<T extends IObject> extends Agent<CalleeBroker> {
           break;
         case 'ctor':
           value = Reflect.construct(target, revive(instruction.a));
+          break;
+        case 'await':
+          value = await target;
+          break;
+        case 'bin':
+          {
+            switch (instruction.o) {
+              case '+':
+                value = revive(instruction.a[0]) + revive(instruction.a[1]);
+                break;
+              case '-':
+                value = revive(instruction.a[0]) - revive(instruction.a[1]);
+                break;
+              case '*':
+                value = revive(instruction.a[0]) * revive(instruction.a[1]);
+                break;
+              case '/':
+                value = revive(instruction.a[0]) / revive(instruction.a[1]);
+                break;
+            }
+          }
           break;
         default:
           throw new Error('Unknown instruction type');

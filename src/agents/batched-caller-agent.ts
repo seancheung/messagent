@@ -9,13 +9,17 @@ export class BatchedCallerAgent<T extends IObject>
   extends Agent<CallerBroker>
   implements ProxyHandler<T>, PromiseLike<any>
 {
+  protected readonly pointer: BatchedCallerAgent.Pointer;
   protected readonly il: number;
   protected readonly instructions: BatchedCallerAgent.Instruction[];
+  protected readonly awaited: boolean;
 
   constructor(options: BatchedCallerAgent.Options) {
     super(options.key, options.broker);
+    this.pointer = options.pointer;
     this.il = options.il || 0;
     this.instructions = options.instructions || [];
+    this.awaited = options.awaited;
   }
 
   get [ILSymbol](): BatchedCallerAgent.Instruction.ILIntermediate {
@@ -29,6 +33,9 @@ export class BatchedCallerAgent<T extends IObject>
       return Reflect.get(this, p, this);
     }
     if (p === 'then') {
+      if (this.awaited) {
+        return;
+      }
       return this.then.bind(this);
     }
     if (p === 'toJSON') {
@@ -45,6 +52,7 @@ export class BatchedCallerAgent<T extends IObject>
       new BatchedCallerAgent({
         key: this.key,
         broker: this.broker,
+        pointer: this.pointer,
         instructions: this.instructions,
         il: this.instructions.length,
       }),
@@ -79,6 +87,7 @@ export class BatchedCallerAgent<T extends IObject>
       new BatchedCallerAgent({
         key: this.key,
         broker: this.broker,
+        pointer: this.pointer,
         instructions: this.instructions,
         il: this.instructions.length,
       }),
@@ -112,6 +121,7 @@ export class BatchedCallerAgent<T extends IObject>
       new BatchedCallerAgent({
         key: this.key,
         broker: this.broker,
+        pointer: this.pointer,
         instructions: this.instructions,
         il: this.instructions.length,
       }),
@@ -126,6 +136,28 @@ export class BatchedCallerAgent<T extends IObject>
     onfulfilled?: (value: any) => TResult1 | PromiseLike<TResult1>,
     onrejected?: (reason: any) => TResult2 | PromiseLike<TResult2>,
   ): PromiseLike<TResult1 | TResult2> {
+    if (!this.pointer.done) {
+      const instruction: BatchedCallerAgent.Instruction.Await = {
+        t: 'await',
+        il: this.il,
+      };
+      this.instructions.push(instruction);
+      return Promise.resolve(
+        new Proxy(
+          CallableTarget,
+          new BatchedCallerAgent({
+            key: this.key,
+            broker: this.broker,
+            pointer: this.pointer,
+            instructions: this.instructions,
+            il: this.instructions.length,
+            awaited: true,
+          }),
+        ),
+      )
+        .then(onfulfilled)
+        .catch(onrejected);
+    }
     return this.broker
       .request({
         type: this.batchType,
@@ -144,8 +176,13 @@ export namespace BatchedCallerAgent {
   export interface Options {
     key: string;
     broker: CallerBroker;
+    pointer: Pointer;
     instructions?: BatchedCallerAgent.Instruction[];
     il?: number;
+    awaited?: boolean;
+  }
+  export interface Pointer {
+    readonly done: boolean;
   }
   export type Instruction =
     | Instruction.Get
@@ -153,6 +190,8 @@ export namespace BatchedCallerAgent {
     | Instruction.Apply
     | Instruction.Del
     | Instruction.Ctor
+    | Instruction.Await
+    | Instruction.MathOp
     | Instruction.Return;
   export namespace Instruction {
     export type ILPrimitive = string | number | boolean | null;
@@ -188,6 +227,54 @@ export namespace BatchedCallerAgent {
       t: 'ctor';
       il: number;
       a?: ILValue[];
+    }
+    export interface Await {
+      t: 'await';
+      il: number;
+    }
+    export interface MathOp {
+      t: 'bin';
+      o: '+' | '-' | '*' | '/';
+      il: number;
+      a: [ILValue, ILValue];
+    }
+    export namespace MathOp {
+      export function sum(a: number, b: number): number {
+        return binary.call(this, '+', a, b);
+      }
+      export function subtract(a: number, b: number): number {
+        return binary.call(this, '-', a, b);
+      }
+      export function multiply(a: number, b: number): number {
+        return binary.call(this, '*', a, b);
+      }
+      export function divide(a: number, b: number): number {
+        return binary.call(this, '/', a, b);
+      }
+      function binary(
+        this: BatchedCallerAgent<any>,
+        o: MathOp['o'],
+        a: any,
+        b: any,
+      ): any {
+        const instruction: MathOp = {
+          t: 'bin',
+          o,
+          il: this.il,
+          a: normalizeValue([a, b]) as any,
+        };
+        this.instructions.push(instruction);
+        return new Proxy(
+          CallableTarget,
+          new BatchedCallerAgent({
+            key: this.key,
+            broker: this.broker,
+            pointer: this.pointer,
+            instructions: this.instructions,
+            il: this.instructions.length,
+          }),
+        );
+      }
     }
     export interface Return {
       t: 'return';
