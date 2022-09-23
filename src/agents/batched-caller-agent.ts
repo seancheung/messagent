@@ -192,6 +192,7 @@ export namespace BatchedCallerAgent {
     | Instruction.Ctor
     | Instruction.Await
     | Instruction.MathOp
+    | Instruction.Iterate
     | Instruction.Return;
   export namespace Instruction {
     export type ILPrimitive = string | number | boolean | null;
@@ -276,6 +277,72 @@ export namespace BatchedCallerAgent {
         );
       }
     }
+    export interface Iterate {
+      t: 'it';
+      f: 'map';
+      il: number;
+      l: Instruction[];
+    }
+    export namespace Iterate {
+      export function map(
+        this: BatchedCallerAgent<any>,
+        source: any,
+        func: (e: any, i: any, a: any, helper: Helper) => any,
+      ) {
+        const subInstructions: Instruction[] = [];
+        const il = source[ILSymbol].__il;
+        const instruction: Iterate = {
+          t: 'it',
+          f: 'map',
+          il,
+          l: subInstructions,
+        };
+        this.instructions.push(instruction);
+        const current = new BatchedCallerAgent({
+          key: this.key,
+          broker: this.broker,
+          pointer: this.pointer,
+          instructions: subInstructions,
+          il: il + 1,
+        });
+        const item = new Proxy(CallableTarget, current);
+        const index = new Proxy(
+          CallableTarget,
+          new BatchedCallerAgent({
+            key: this.key,
+            broker: this.broker,
+            pointer: this.pointer,
+            instructions: subInstructions,
+            il: il + 2,
+          }),
+        );
+        const arr = new Proxy(
+          CallableTarget,
+          new BatchedCallerAgent({
+            key: this.key,
+            broker: this.broker,
+            pointer: this.pointer,
+            instructions: this.instructions,
+            il: il + 3,
+          }),
+        );
+        const helper = bindHelper(current);
+        func(item, index, arr, helper);
+        subInstructions.push({
+          t: 'return',
+        });
+        return new Proxy(
+          CallableTarget,
+          new BatchedCallerAgent({
+            key: this.key,
+            broker: this.broker,
+            pointer: this.pointer,
+            instructions: this.instructions,
+            il: this.instructions.length,
+          }),
+        );
+      }
+    }
     export interface Return {
       t: 'return';
       v?: ILValue;
@@ -286,7 +353,7 @@ export namespace BatchedCallerAgent {
       }
       return raw == null ? raw : JSON.parse(JSON.stringify(raw));
     }
-    export function isILIntermediate(value: unknown): value is ILIntermediate {
+    export function isStackValue(value: unknown): value is ILIntermediate {
       return (
         value != null &&
         typeof value === 'object' &&
@@ -295,14 +362,33 @@ export namespace BatchedCallerAgent {
         typeof (value as ILIntermediate).__il === 'number'
       );
     }
-    export function reviveIL(ils: any[], value: unknown): any {
-      if (isILIntermediate(value)) {
-        return ils[value.__il];
+    export function resolveStack(stack: any[], value: unknown): any {
+      if (isStackValue(value)) {
+        return stack[value.__il];
       }
       if (Array.isArray(value)) {
-        return value.map((e) => reviveIL(ils, e));
+        return value.map((e) => resolveStack(stack, e));
       }
       return value;
+    }
+    export interface Helper {
+      sum(a: number, b: number): number;
+      subtract(a: number, b: number): number;
+      multiply(a: number, b: number): number;
+      divide(a: number, b: number): number;
+      map<T, U>(
+        items: T[],
+        callbackfn: (value: T, index: number, array: T[], helper: Helper) => U,
+      ): U[];
+    }
+    export function bindHelper(thisArg: any): Helper {
+      return {
+        sum: MathOp.sum.bind(thisArg),
+        subtract: MathOp.subtract.bind(thisArg),
+        multiply: MathOp.multiply.bind(thisArg),
+        divide: MathOp.divide.bind(thisArg),
+        map: Iterate.map.bind(thisArg),
+      };
     }
   }
 }

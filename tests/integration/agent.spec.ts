@@ -105,8 +105,8 @@ describe('test agents', () => {
     expect(await agent.items.length).toEqual(0);
   });
 
-  test('test batch', async () => {
-    const agentKey = 'test-batch';
+  test('test batch basic', async () => {
+    const agentKey = 'test-batch-basic';
     class NestedCallee {
       id: number;
       constructor(id: number) {
@@ -161,27 +161,45 @@ describe('test agents', () => {
     expect(res).toEqual(8);
   });
 
-  test('test batch match', async () => {
-    const agentKey = 'test-batch-math';
+  // test('test batch match', async () => {
+  //   const agentKey = 'test-batch-math';
+  //   class TestCallee {
+  //     x = 1;
+  //     y = 2;
+  //     z = 0;
+  //   }
+  //   const original = new TestCallee();
+  //   calleeBroker.injectAgent(agentKey, original, true);
+  //   const res = await callerBroker.useAgent<TestCallee, number>(
+  //     agentKey,
+  //     (agent, { sum, subtract, divide, multiply }) => {
+  //       agent.x = sum(agent.x, 1);
+  //       agent.y = subtract(agent.y, 1);
+  //       agent.z = divide(agent.x, agent.y);
+  //       return multiply(2, agent.z);
+  //     },
+  //   );
+  //   expect(original.x).toEqual(2);
+  //   expect(original.y).toEqual(1);
+  //   expect(original.z).toEqual(2);
+  //   expect(res).toEqual(4);
+  // });
+
+  test('test batch map', async () => {
+    const agentKey = 'test-batch-map';
     class TestCallee {
-      x = 1;
-      y = 2;
-      z = 0;
+      items = [{ id: 1 }, { id: 2 }, { id: 3 }];
     }
     const original = new TestCallee();
     calleeBroker.injectAgent(agentKey, original, true);
-    const res = await callerBroker.useAgent<TestCallee, number>(
+    const res = await callerBroker.useAgent<TestCallee, number[]>(
       agentKey,
-      (agent, { sum, subtract, divide, multiply }) => {
-        agent.x = sum(agent.x, 1);
-        agent.y = subtract(agent.y, 1);
-        agent.z = divide(agent.x, agent.y);
-        return multiply(2, agent.z);
+      (agent, { map }) => {
+        return map(agent.items, (item, _, __, { multiply }) =>
+          multiply(item.id, 2),
+        );
       },
     );
-    expect(original.x).toEqual(2);
-    expect(original.y).toEqual(1);
-    expect(original.z).toEqual(2);
-    expect(res).toEqual(4);
+    expect(res).toEqual([2, 4, 6]);
   });
 });

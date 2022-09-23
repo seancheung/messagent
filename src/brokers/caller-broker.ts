@@ -143,11 +143,11 @@ export class CallerBroker extends Broker {
    */
   useAgent<T extends IObject, R>(
     key: string,
-    func: (agent: T, helpers: CallerBroker.BatchAgentHelper) => R,
+    func: (agent: T, helper: BatchedCallerAgent.Instruction.Helper) => R,
   ): Promise<R>;
   useAgent<T extends IObject, R>(
     key: string,
-    func?: (agent: T, helpers?: CallerBroker.BatchAgentHelper) => R,
+    func?: (agent: T, helper?: BatchedCallerAgent.Instruction.Helper) => R,
   ): DeepAgent<T> | Promise<R> {
     if (!func) {
       return new Proxy(
@@ -167,19 +167,13 @@ export class CallerBroker extends Broker {
       instructions,
     });
     const proxy = new Proxy({} as T, agent);
-    const helpers: CallerBroker.BatchAgentHelper = {
-      sum: BatchedCallerAgent.Instruction.MathOp.sum.bind(agent),
-      subtract: BatchedCallerAgent.Instruction.MathOp.subtract.bind(agent),
-      multiply: BatchedCallerAgent.Instruction.MathOp.multiply.bind(agent),
-      divide: BatchedCallerAgent.Instruction.MathOp.divide.bind(agent),
-    };
-    return Promise.resolve(func(proxy, helpers)).then((res) => {
+    const helper = BatchedCallerAgent.Instruction.bindHelper(agent);
+    return Promise.resolve(func(proxy, helper)).then((res) => {
       if (res !== undefined) {
-        const instruction: BatchedCallerAgent.Instruction.Return = {
+        instructions.push({
           t: 'return',
           v: BatchedCallerAgent.Instruction.normalizeValue(res),
-        };
-        instructions.push(instruction);
+        });
       }
       pointer.done = true;
       return Promise.resolve(agent);
@@ -213,10 +207,4 @@ export namespace CallerBroker {
   }
   export type EventHandler = (payload?: any) => void;
   export type ResponseHandler = (error?: Error, payload?: any) => void;
-  export interface BatchAgentHelper {
-    sum(a: number, b: number): number;
-    subtract(a: number, b: number): number;
-    multiply(a: number, b: number): number;
-    divide(a: number, b: number): number;
-  }
 }

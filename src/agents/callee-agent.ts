@@ -41,67 +41,92 @@ export class CalleeAgent<T extends IObject> extends Agent<CalleeBroker> {
     }, this.target);
   };
 
-  protected onBatched: CalleeBroker.MessageHandler = async (
+  protected onBatched: CalleeBroker.MessageHandler = (
     _,
     payload: BatchedCallerAgent.Instruction[],
   ) => {
     if (!this.deep) {
       throw new Error('Invalid deep access');
     }
-    const ils: any[] = [this.target];
-    const revive = BatchedCallerAgent.Instruction.reviveIL.bind(undefined, ils);
-    for (const instruction of payload) {
-      if (instruction.t === 'return') {
-        return revive(instruction.v);
-      }
-      const target = ils[instruction.il];
-      let value: any;
-      switch (instruction.t) {
-        case 'get':
-          value = Reflect.get(target, instruction.p, target);
-          break;
-        case 'set':
-          Reflect.set(target, instruction.p, revive(instruction.v));
-          break;
-        case 'apply':
-          // TODO: async?
-          value = Reflect.apply(target, undefined, revive(instruction.a));
-          break;
-        case 'del':
-          Reflect.deleteProperty(target, instruction.p);
-          break;
-        case 'ctor':
-          value = Reflect.construct(target, revive(instruction.a));
-          break;
-        case 'await':
-          value = await target;
-          break;
-        case 'bin':
-          {
-            switch (instruction.o) {
-              case '+':
-                value = revive(instruction.a[0]) + revive(instruction.a[1]);
-                break;
-              case '-':
-                value = revive(instruction.a[0]) - revive(instruction.a[1]);
-                break;
-              case '*':
-                value = revive(instruction.a[0]) * revive(instruction.a[1]);
-                break;
-              case '/':
-                value = revive(instruction.a[0]) / revive(instruction.a[1]);
-                break;
-            }
+    const stack: any[] = [this.target];
+    const revive = BatchedCallerAgent.Instruction.resolveStack.bind(
+      undefined,
+      stack,
+    );
+    async function evaluate(instructions: BatchedCallerAgent.Instruction[]) {
+      for (const instruction of instructions) {
+        if (instruction.t === 'return') {
+          if (instruction.v === undefined) {
+            return stack[stack.length - 1];
           }
-          break;
-        default:
-          throw new Error('Unknown instruction type');
+          return revive(instruction.v);
+        }
+        const target = stack[instruction.il];
+        let value: any;
+        switch (instruction.t) {
+          case 'get':
+            value = Reflect.get(target, instruction.p, target);
+            break;
+          case 'set':
+            Reflect.set(target, instruction.p, revive(instruction.v));
+            break;
+          case 'apply':
+            value = Reflect.apply(target, undefined, revive(instruction.a));
+            break;
+          case 'del':
+            Reflect.deleteProperty(target, instruction.p);
+            break;
+          case 'ctor':
+            value = Reflect.construct(target, revive(instruction.a));
+            break;
+          case 'await':
+            value = await target;
+            break;
+          case 'bin':
+            {
+              switch (instruction.o) {
+                case '+':
+                  value = revive(instruction.a[0]) + revive(instruction.a[1]);
+                  break;
+                case '-':
+                  value = revive(instruction.a[0]) - revive(instruction.a[1]);
+                  break;
+                case '*':
+                  console.log(instruction, stack);
+                  value = revive(instruction.a[0]) * revive(instruction.a[1]);
+                  break;
+                case '/':
+                  value = revive(instruction.a[0]) / revive(instruction.a[1]);
+                  break;
+              }
+            }
+            break;
+          case 'it':
+            {
+              switch (instruction.f) {
+                case 'map':
+                  value = [];
+                  for (let i = 0; i < target.length; i++) {
+                    stack.splice(instruction.il + 1, 3, target[i], i, target);
+                    const res = await evaluate(instruction.l);
+                    value.push(res);
+                  }
+                  stack.splice(instruction.il + 1, 3);
+                  stack.splice(instruction.il + 1, value.length, value);
+                  break;
+              }
+            }
+            break;
+          default:
+            throw new Error('Unknown instruction type');
+        }
+        if (typeof value === 'function') {
+          value = value.bind(target);
+        }
+        stack.push(value);
       }
-      if (typeof value === 'function') {
-        value = value.bind(target);
-      }
-      ils.push(value);
     }
+    return evaluate(payload);
   };
 
   /**
