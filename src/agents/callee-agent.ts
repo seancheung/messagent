@@ -6,6 +6,7 @@ import {
   MixedExpression,
   ReferencedValue,
   ReturnExpression,
+  SyncExpression,
   TargetExpression,
 } from './agent';
 
@@ -50,16 +51,25 @@ class CalleeAgentRunner {
     this.params = options.params;
   }
 
-  async run(exps: MixedExpression[]) {
+  runSync(exps: SyncExpression[]) {
     for (const exp of exps) {
       if (exp.type === 'return') {
         return this.resolveValue(exp.value);
       }
-      await this.exec(exp);
+      this.execSync(exp);
     }
   }
 
-  async exec(exp: Exclude<MixedExpression, ReturnExpression>) {
+  async runAsync(exps: MixedExpression[]) {
+    for (const exp of exps) {
+      if (exp.type === 'return') {
+        return this.resolveValue(exp.value);
+      }
+      await this.execAsync(exp);
+    }
+  }
+
+  execSync(exp: Exclude<SyncExpression, ReturnExpression>) {
     const target = this.resolveTargetVar(exp);
     let value: any;
     switch (exp.type) {
@@ -87,7 +97,8 @@ class CalleeAgentRunner {
                     parentScope: this,
                     params,
                   });
-                  return closure.run(arg.$$exps as MixedExpression[]);
+                  // NOTE: async callback is not supported
+                  return closure.runSync(arg.$$exps as SyncExpression[]);
                 };
               }
               return arg;
@@ -120,9 +131,6 @@ class CalleeAgentRunner {
           }
         }
         break;
-      case 'async':
-        value = await target;
-        break;
       case 'var':
         value = this.params?.[exp.index];
         break;
@@ -130,6 +138,18 @@ class CalleeAgentRunner {
         throw new Error('Unknown expression');
     }
     this.stack.push(value);
+  }
+
+  async execAsync(exp: Exclude<MixedExpression, ReturnExpression>) {
+    switch (exp.type) {
+      case 'async':
+        const target = this.resolveTargetVar(exp);
+        this.stack.push(await target);
+        break;
+      default:
+        this.execSync(exp);
+        break;
+    }
   }
 
   resolveScope(scope: number): CalleeAgentRunner {
@@ -183,7 +203,7 @@ export class CalleeAgent {
       scopeIndex: 0,
       target: this.target,
     });
-    const res = await runner.run(payload);
+    const res = await runner.runAsync(payload);
     return res;
   };
 

@@ -1,5 +1,3 @@
-import type { IObject } from '../adapters';
-
 export interface MathObject {
   add(x: number, y: number): number;
   subtract(x: number, y: number): number;
@@ -58,7 +56,7 @@ export interface ArgumentExpression extends ScopedExpression {
   type: 'var';
   index: number;
 }
-export type MixedExpression =
+export type SyncExpression =
   | GetExpression
   | SetExpression
   | DelExpression
@@ -66,8 +64,8 @@ export type MixedExpression =
   | ApplyExpression
   | ReturnExpression
   | MathExpression
-  | AsyncExpression
   | ArgumentExpression;
+export type MixedExpression = SyncExpression | AsyncExpression;
 
 export interface ClosureArgument {
   $$type: 'closure';
@@ -77,16 +75,3 @@ export interface ClosureArgument {
 export function getBrokerMessageType(targetKey: string) {
   return `agent.invoke.${targetKey}`;
 }
-
-export type DeepAgent<T extends IObject> = {
-  [K in keyof T]: T[K] extends (...args: infer P) => infer R
-    ? (...args: P) => R extends Promise<any> ? R : Promise<R>
-    : T[K] extends string | number | boolean | bigint | undefined | null
-    ? Promise<T[K]>
-    : T[K] extends Array<any>
-    ? Promise<T[K]> &
-        DeepAgent<{
-          [P in keyof T[K]]: P extends number ? never : T[K][P];
-        }>
-    : Promise<T[K]> & DeepAgent<T[K]>;
-};

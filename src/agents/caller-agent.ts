@@ -22,7 +22,9 @@ function createProxy(handler: CallerAgentProxyHandler) {
   return new Proxy(CallableTarget, handler);
 }
 
-function createMathObject(handler: CallerAgentProxyHandler): MathObject {
+function createMathObject(
+  globalContext: GlobalContext<CallerAgentContext>,
+): MathObject {
   const operators: (keyof MathObject)[] = [
     'add',
     'subtract',
@@ -33,7 +35,12 @@ function createMathObject(handler: CallerAgentProxyHandler): MathObject {
     operators.map((operator) => [
       operator,
       (x: number, y: number) => {
-        const context = handler.getCurrentContext();
+        const context = globalContext.current;
+        if (!context) {
+          throw new Error(
+            `Math.${operator} must be used inside Agent callback function`,
+          );
+        }
         const exp: MathExpression = {
           type: 'math',
           operator,
@@ -45,6 +52,7 @@ function createMathObject(handler: CallerAgentProxyHandler): MathObject {
         return createProxy(
           new CallerAgentProxyHandler(context, {
             stackIndex: context.stack.length - 1,
+            globalContext,
           }),
         );
       },
@@ -72,23 +80,24 @@ class CallerAgentContext {
 }
 
 interface CallerAgentProxyHandlerOptions {
+  globalContext: GlobalContext<CallerAgentContext>;
   stackIndex: number;
   isResolved?: boolean;
 }
 class CallerAgentProxyHandler implements ProxyHandler<any> {
   protected readonly context: CallerAgentContext;
-  private readonly _stackIndex: number;
-  private readonly _isResolved: boolean;
-  private _currentContext: CallerAgentContext;
+  protected readonly globalContext: GlobalContext<CallerAgentContext>;
+  protected readonly stackIndex: number;
+  protected readonly isResolved: boolean;
 
   constructor(
     context: CallerAgentContext,
     options: CallerAgentProxyHandlerOptions,
   ) {
     this.context = context;
-    this._stackIndex = options.stackIndex;
-    this._isResolved = options.isResolved;
-    this._currentContext = this.context;
+    this.globalContext = options.globalContext;
+    this.stackIndex = options.stackIndex;
+    this.isResolved = options.isResolved;
   }
 
   protected toStackVar = (options: CallerAgentProxyHandlerOptions) => {
@@ -110,12 +119,18 @@ class CallerAgentProxyHandler implements ProxyHandler<any> {
       stack,
     });
     const args = stack.map((_, i) =>
-      createProxy(new CallerAgentProxyHandler(context, { stackIndex: i })),
+      createProxy(
+        new CallerAgentProxyHandler(context, {
+          stackIndex: i,
+          globalContext: this.globalContext,
+        }),
+      ),
     );
     // NOTE: for context hook usage
-    this._currentContext = context;
+    const _context = this.globalContext.current;
+    this.globalContext.current = context;
     const returnValue = func(...args);
-    this._currentContext = context;
+    this.globalContext.current = _context;
     const returnExp: ReturnExpression = {
       type: 'return',
       value: returnValue,
@@ -136,13 +151,14 @@ class CallerAgentProxyHandler implements ProxyHandler<any> {
     const exp: AsyncExpression = {
       type: 'async',
       scope: scopeIndex,
-      target: this._stackIndex,
+      target: this.stackIndex,
     };
     stack.push(exp);
     return Promise.resolve(
       this.toStackVar({
         stackIndex: stack.length - 1,
         isResolved: true,
+        globalContext: this.globalContext,
       }),
     )
       .then(resolve)
@@ -152,13 +168,9 @@ class CallerAgentProxyHandler implements ProxyHandler<any> {
   protected toRef = (): ReferencedValue => {
     return {
       $$scope: this.context.scopeIndex,
-      $$var: this._stackIndex,
+      $$var: this.stackIndex,
     };
   };
-
-  getCurrentContext() {
-    return this._currentContext;
-  }
 
   getProxy() {
     return createProxy(this);
@@ -169,7 +181,7 @@ class CallerAgentProxyHandler implements ProxyHandler<any> {
       return Reflect.get(this, p, this);
     }
     if (p === 'then') {
-      if (this._isResolved) {
+      if (this.isResolved) {
         return;
       }
       return this.toAsync;
@@ -182,11 +194,12 @@ class CallerAgentProxyHandler implements ProxyHandler<any> {
       type: 'get',
       p,
       scope: scopeIndex,
-      target: this._stackIndex,
+      target: this.stackIndex,
     };
     stack.push(exp);
     return this.toStackVar({
       stackIndex: stack.length - 1,
+      globalContext: this.globalContext,
     });
   }
 
@@ -200,7 +213,7 @@ class CallerAgentProxyHandler implements ProxyHandler<any> {
       p,
       newValue,
       scope: scopeIndex,
-      target: this._stackIndex,
+      target: this.stackIndex,
     };
     stack.push(exp);
     // NOTE: always true since the actual execution is deferred
@@ -216,7 +229,7 @@ class CallerAgentProxyHandler implements ProxyHandler<any> {
       type: 'del',
       p,
       scope: scopeIndex,
-      target: this._stackIndex,
+      target: this.stackIndex,
     };
     stack.push(exp);
     // NOTE: always true since the actual execution is deferred
@@ -229,10 +242,13 @@ class CallerAgentProxyHandler implements ProxyHandler<any> {
       type: 'new',
       args: argArray,
       scope: scopeIndex,
-      target: this._stackIndex,
+      target: this.stackIndex,
     };
     stack.push(exp);
-    return this.toStackVar({ stackIndex: stack.length - 1 });
+    return this.toStackVar({
+      stackIndex: stack.length - 1,
+      globalContext: this.globalContext,
+    });
   }
 
   apply(target: any, thisArg: any, argArray: any[]) {
@@ -253,11 +269,12 @@ class CallerAgentProxyHandler implements ProxyHandler<any> {
       type: 'apply',
       args: argArray,
       scope: scopeIndex,
-      target: this._stackIndex,
+      target: this.stackIndex,
     };
     stack.push(exp);
     return this.toStackVar({
       stackIndex: stack.length - 1,
+      globalContext: this.globalContext,
     });
   }
 
@@ -266,23 +283,29 @@ class CallerAgentProxyHandler implements ProxyHandler<any> {
   }
 }
 
+interface GlobalContext<T> {
+  current?: T;
+}
 export class CallerAgent {
   protected readonly targetKey: string;
   protected readonly broker: CallerBroker;
   protected readonly expressions: Expression[];
   protected readonly handler: CallerAgentProxyHandler;
+  protected globalContext: GlobalContext<CallerAgentContext>;
 
   constructor(options: CallerAgent.Options) {
     this.targetKey = options.targetKey;
     this.broker = options.broker;
     this.expressions = [];
-    this.handler = new CallerAgentProxyHandler(
-      new CallerAgentContext({
-        scopeIndex: 0,
-        stack: this.expressions,
-      }),
-      { stackIndex: -1 },
-    );
+    const context = new CallerAgentContext({
+      scopeIndex: 0,
+      stack: this.expressions,
+    });
+    this.globalContext = { current: context };
+    this.handler = new CallerAgentProxyHandler(context, {
+      stackIndex: -1,
+      globalContext: this.globalContext,
+    });
   }
 
   getProxiedTarget() {
@@ -290,7 +313,7 @@ export class CallerAgent {
   }
 
   getMathObject() {
-    return createMathObject(this.handler);
+    return createMathObject(this.globalContext);
   }
 
   async resolve(ret?: any): Promise<any> {

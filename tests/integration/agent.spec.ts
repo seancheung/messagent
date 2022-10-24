@@ -204,4 +204,43 @@ describe('test agents', () => {
     expect(original.z).toEqual(2);
     expect(res).toEqual(4);
   });
+
+  test('test callback', async () => {
+    const agentKey = 'test-callback';
+    class TestCallee {
+      items = [{ id: 1 }, { id: 2 }, { id: 3 }];
+      list = [{ items: [1, 2, 3] }, { items: [4, 5, 6] }];
+    }
+    const original = new TestCallee();
+    calleeBroker.injectAgent(agentKey, original);
+    const res = await callerBroker.useAgent<TestCallee, number[]>(
+      agentKey,
+      (target) => {
+        return target.items.map((item) => item.id);
+      },
+    );
+    expect(res).toEqual(original.items.map((item) => item.id));
+    await callerBroker.useAgent<TestCallee>(agentKey, (target, { Math }) => {
+      target.items.forEach((item) => {
+        item.id = Math.multiply(item.id, 2);
+      });
+    });
+    expect(original.items).toEqual([{ id: 2 }, { id: 4 }, { id: 6 }]);
+    const sum = await callerBroker.useAgent<TestCallee, number>(
+      agentKey,
+      (target, { Math }) => {
+        return target.list.reduce(
+          (a, b) =>
+            Math.add(
+              a,
+              b.items.reduce((a, b) => Math.add(a, b), 0),
+            ),
+          0,
+        );
+      },
+    );
+    expect(sum).toEqual(
+      original.list.reduce((a, b) => a + b.items.reduce((a, b) => a + b, 0), 0),
+    );
+  });
 });
