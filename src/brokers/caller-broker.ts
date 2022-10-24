@@ -1,17 +1,16 @@
-import { IAdapter, IObject } from '../adapter';
-import { DeepAgent } from '../agent';
-import { BatchedCallerAgent, DeferredCallerAgent } from '../agents';
-import { Broker } from '../broker';
+import { IAdapter, IObject } from '../adapters';
+import { CallerAgent, MathObject } from '../agents';
+import { IRegistrar } from '../registrars';
+import { DefaultRegistrar } from '../registrars/default-registrar';
+import { nextTick } from '../utils';
 import {
+  Broker,
   BrokerMessage,
   BrokerRequest,
   BrokerResponse,
   isEvent,
   isResponse,
-} from '../message';
-import { IRegistrar } from '../registrar';
-import { DefaultRegistrar } from '../registrars/default-registrar';
-import { nextTick } from '../utils';
+} from './broker';
 
 /**
  * Calls `CalleeBroker`
@@ -131,59 +130,20 @@ export class CallerBroker extends Broker {
   }
 
   /**
-   * Get an deferred agent
-   * @param key Agent key
-   */
-  useAgent<T extends IObject>(key: string): DeepAgent<T>;
-  /**
-   * Run operations with batched agent
+   * Run deferred operations with agent
    * @param key Agent key
    * @param func Batch function
    * @returns Function return value
    */
-  useAgent<T extends IObject, R>(
+  async useAgent<T extends IObject, R = void>(
     key: string,
-    func: (agent: T, helpers: CallerBroker.BatchAgentHelper) => R,
-  ): Promise<R>;
-  useAgent<T extends IObject, R>(
-    key: string,
-    func?: (agent: T, helpers?: CallerBroker.BatchAgentHelper) => R,
-  ): DeepAgent<T> | Promise<R> {
-    if (!func) {
-      return new Proxy(
-        {} as any,
-        new DeferredCallerAgent<T>({
-          broker: this,
-          key,
-        }),
-      );
-    }
-    const instructions: BatchedCallerAgent.Instruction[] = [];
-    const pointer: Writabe<BatchedCallerAgent.Pointer> = { done: false };
-    const agent = new BatchedCallerAgent<T>({
-      key,
-      broker: this,
-      pointer,
-      instructions,
-    });
-    const proxy = new Proxy({} as T, agent);
-    const helpers: CallerBroker.BatchAgentHelper = {
-      sum: BatchedCallerAgent.Instruction.MathOp.sum.bind(agent),
-      subtract: BatchedCallerAgent.Instruction.MathOp.subtract.bind(agent),
-      multiply: BatchedCallerAgent.Instruction.MathOp.multiply.bind(agent),
-      divide: BatchedCallerAgent.Instruction.MathOp.divide.bind(agent),
-    };
-    return Promise.resolve(func(proxy, helpers)).then((res) => {
-      if (res !== undefined) {
-        const instruction: BatchedCallerAgent.Instruction.Return = {
-          t: 'return',
-          v: BatchedCallerAgent.Instruction.normalizeValue(res),
-        };
-        instructions.push(instruction);
-      }
-      pointer.done = true;
-      return Promise.resolve(agent);
-    });
+    func: (target: T, helpers: CallerBroker.Helpers) => R | Promise<R>,
+  ): Promise<R> {
+    const agent = new CallerAgent({ targetKey: key, broker: this });
+    const target = agent.getProxiedTarget();
+    const math = agent.getMathObject();
+    const ret = func(target, { Math: math });
+    return agent.resolve(ret);
   }
 
   /**
@@ -213,10 +173,7 @@ export namespace CallerBroker {
   }
   export type EventHandler = (payload?: any) => void;
   export type ResponseHandler = (error?: Error, payload?: any) => void;
-  export interface BatchAgentHelper {
-    sum(a: number, b: number): number;
-    subtract(a: number, b: number): number;
-    multiply(a: number, b: number): number;
-    divide(a: number, b: number): number;
+  export interface Helpers {
+    Math: MathObject;
   }
 }

@@ -1,10 +1,4 @@
-import {
-  BatchedCallerAgent,
-  CalleeBroker,
-  CallerBroker,
-  DeferredCallerAgent,
-  WindowAdapter,
-} from '../../src';
+import { CalleeBroker, CallerBroker, WindowAdapter } from '../../src';
 
 describe('test agents', () => {
   let calleeBroker: CalleeBroker;
@@ -43,10 +37,13 @@ describe('test agents', () => {
       id = value;
     }
     calleeBroker.injectAgent(agentKey, new TestCallee());
-    const agent = callerBroker.useAgent<TestCallee>(agentKey);
-    const prop = agent.id;
-    expect(prop).toBeInstanceOf(DeferredCallerAgent);
-    expect(await prop).toEqual(value);
+    const res = await callerBroker.useAgent<TestCallee, number>(
+      agentKey,
+      async (target) => {
+        return target.id;
+      },
+    );
+    expect(res).toEqual(value);
   });
 
   test('test set', async () => {
@@ -58,14 +55,14 @@ describe('test agents', () => {
     const original = new TestCallee();
     calleeBroker.injectAgent(agentKey, original);
     expect(original.id).toBeUndefined();
-    const agent = callerBroker.useAgent<TestCallee>(agentKey);
-    (agent as any as TestCallee).id = value;
-    await new Promise((resolve) => setTimeout(resolve, 1));
+    await callerBroker.useAgent<TestCallee>(agentKey, (target) => {
+      target.id = value;
+    });
     expect(original.id).toEqual(value);
   });
 
-  test('test call', async () => {
-    const agentKey = 'test-call';
+  test('test apply', async () => {
+    const agentKey = 'test-apply';
     const value = 1;
     class TestCallee {
       run() {
@@ -73,10 +70,13 @@ describe('test agents', () => {
       }
     }
     calleeBroker.injectAgent(agentKey, new TestCallee());
-    const agent = callerBroker.useAgent<TestCallee>(agentKey);
-    const res = agent.run();
-    expect(res).toBeInstanceOf(DeferredCallerAgent);
-    expect(await res).toEqual(value);
+    const res = await callerBroker.useAgent<TestCallee, number>(
+      agentKey,
+      (target) => {
+        return target.run();
+      },
+    );
+    expect(res).toEqual(value);
   });
 
   test('test deep', async () => {
@@ -94,15 +94,37 @@ describe('test agents', () => {
         this.items.push(new NestedCallee(id));
       }
     }
-    calleeBroker.injectAgent(agentKey, new TestCallee(), true);
-    const agent = callerBroker.useAgent<TestCallee>(agentKey);
-    expect(await agent.item.id).toEqual(1);
-    expect(await agent.item).toEqual({ id: 1 });
-    expect(await agent.items).toBeInstanceOf(Array);
-    await agent.spawn(3);
-    expect(await agent.items.length).toEqual(2);
-    await agent.items.splice(0, await agent.items.length);
-    expect(await agent.items.length).toEqual(0);
+    const original = new TestCallee();
+    calleeBroker.injectAgent(agentKey, original);
+    const res1 = await callerBroker.useAgent<TestCallee, number>(
+      agentKey,
+      (target) => {
+        return target.item.id;
+      },
+    );
+    expect(res1).toEqual(1);
+    const res2 = await callerBroker.useAgent<TestCallee, NestedCallee>(
+      agentKey,
+      (target) => {
+        return target.item;
+      },
+    );
+    expect(res2).toEqual({ id: 1 });
+    const res3 = await callerBroker.useAgent<TestCallee, NestedCallee[]>(
+      agentKey,
+      (target) => {
+        return target.items;
+      },
+    );
+    expect(res3).toBeInstanceOf(Array);
+    await callerBroker.useAgent<TestCallee>(agentKey, (target) => {
+      target.spawn(3);
+    });
+    expect(original.items.length).toEqual(2);
+    await callerBroker.useAgent<TestCallee>(agentKey, (target) => {
+      target.items.splice(0, target.items.length);
+    });
+    expect(original.items.length).toEqual(0);
   });
 
   test('test batch', async () => {
@@ -121,18 +143,17 @@ describe('test agents', () => {
       Item = NestedCallee;
     }
     const original = new TestCallee();
-    calleeBroker.injectAgent(agentKey, original, true);
+    calleeBroker.injectAgent(agentKey, original);
     const count = await callerBroker.useAgent<TestCallee, number>(
       agentKey,
-      (agent) => {
-        expect(agent).toBeInstanceOf(BatchedCallerAgent);
-        const item1 = agent.spawn(1);
-        const item2 = agent.spawn(2);
-        agent.items.push(item1, item2);
+      (target) => {
+        const item1 = target.spawn(1);
+        const item2 = target.spawn(2);
+        target.items.push(item1, item2);
         item2.id = 3;
-        const item3 = new agent.Item(4);
-        agent.items.push(item3);
-        return agent.items.length;
+        const item3 = new target.Item(4);
+        target.items.push(item3);
+        return target.items.length;
       },
     );
     expect(count).toEqual(3);
@@ -141,42 +162,41 @@ describe('test agents', () => {
     expect(original.items[2].id).toEqual(4);
   });
 
-  test('test batch async', async () => {
-    const agentKey = 'test-batch-async';
+  test('test async', async () => {
+    const agentKey = 'test-async';
     class TestCallee {
       async calc(num: number) {
         return 2 * num;
       }
     }
     const original = new TestCallee();
-    calleeBroker.injectAgent(agentKey, original, true);
+    calleeBroker.injectAgent(agentKey, original);
     const res = await callerBroker.useAgent<TestCallee, Promise<number>>(
       agentKey,
-      async (agent) => {
-        const data = agent.calc(2);
-        const num = await data;
-        return agent.calc(num);
+      async (target) => {
+        const num = await target.calc(2);
+        return target.calc(num);
       },
     );
     expect(res).toEqual(8);
   });
 
-  test('test batch match', async () => {
-    const agentKey = 'test-batch-math';
+  test('test math', async () => {
+    const agentKey = 'test-math';
     class TestCallee {
       x = 1;
       y = 2;
       z = 0;
     }
     const original = new TestCallee();
-    calleeBroker.injectAgent(agentKey, original, true);
+    calleeBroker.injectAgent(agentKey, original);
     const res = await callerBroker.useAgent<TestCallee, number>(
       agentKey,
-      (agent, { sum, subtract, divide, multiply }) => {
-        agent.x = sum(agent.x, 1);
-        agent.y = subtract(agent.y, 1);
-        agent.z = divide(agent.x, agent.y);
-        return multiply(2, agent.z);
+      (target, { Math }) => {
+        target.x = Math.add(target.x, 1);
+        target.y = Math.subtract(target.y, 1);
+        target.z = Math.divide(target.x, target.y);
+        return Math.multiply(2, target.z);
       },
     );
     expect(original.x).toEqual(2);

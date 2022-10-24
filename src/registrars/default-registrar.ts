@@ -1,4 +1,4 @@
-import { IRegistrar } from '../registrar';
+import { IRegistrar } from './registrar';
 
 export class DefaultRegistrar implements IRegistrar {
   private _seed = 0;

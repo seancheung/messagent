@@ -1,4 +1,4 @@
-import { Dispatch, IAdapter, JSONObject } from '../adapter';
+import { Dispatch, IAdapter, JSONObject } from './adapter';
 
 export namespace FigmaPluginAdapter {
   declare const figma: any;

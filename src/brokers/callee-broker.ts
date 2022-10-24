@@ -1,14 +1,14 @@
-import { IAdapter, IObject } from '../adapter';
+import { IAdapter } from '../adapters';
 import { CalleeAgent } from '../agents';
-import { Broker } from '../broker';
+import { formatError, nextTick } from '../utils';
 import {
+  Broker,
   BrokerMessage,
   BrokerRequest,
   BrokerResponse,
   isEvent,
   isRequest,
-} from '../message';
-import { formatError, nextTick } from '../utils';
+} from './broker';
 
 /**
  * Called by `CallerBroker`
@@ -18,7 +18,7 @@ export class CalleeBroker extends Broker {
     string,
     CalleeBroker.MessageRawHandler
   >();
-  protected readonly agents = new Map<string, CalleeAgent<IObject>>();
+  protected readonly agents = new Map<string, CalleeAgent>();
 
   constructor(options: CalleeBroker.Options) {
     super(options.adapter);
@@ -138,29 +138,13 @@ export class CalleeBroker extends Broker {
    * @param key Agent key
    * @param target Agent target
    */
-  injectAgent<T extends IObject>(key: string, target: T): void;
-  /**
-   * Inject agent
-   * @param key Agent key
-   * @param target Agent target
-   * @param deep Allow deep access
-   */
-  injectAgent<T extends IObject>(key: string, target: T, deep: true): void;
-  /**
-   * Inject agent
-   * @param key Agent key
-   * @param target Agent target
-   * @param deep Allow deep access
-   */
-  injectAgent<T extends IObject>(key: string, target: T, deep: false): void;
-  injectAgent<T extends IObject>(key: string, target: T, deep?: boolean): void {
+  injectAgent(key: string, target: any): void {
     if (this.agents.has(key)) {
       throw new Error('Agent key conflict');
     }
     const agent = new CalleeAgent(target, {
+      targetKey: key,
       broker: this,
-      key,
-      deep,
     });
     agent.inject();
     this.agents.set(key, agent);

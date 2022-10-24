@@ -1,3 +1,3 @@
-export * from './batched-caller-agent';
+export { DeepAgent, MathObject } from './agent';
 export * from './callee-agent';
-export * from './deferred-caller-agent';
+export * from './caller-agent';
