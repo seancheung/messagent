@@ -318,7 +318,6 @@ export class CallerAgent {
       this.scope.stack.push(exp);
     }
     const payload = this.scope.printStack();
-    console.log(JSON.stringify(payload));
     return this.broker.request({
       type: getBrokerMessageType(this.targetKey),
       payload,
