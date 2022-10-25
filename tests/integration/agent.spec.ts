@@ -243,4 +243,31 @@ describe('test agents', () => {
       original.list.reduce((a, b) => a + b.items.reduce((a, b) => a + b, 0), 0),
     );
   });
+
+  test('test scope', async () => {
+    const agentKey = 'test-scope';
+    interface Item {
+      value: number;
+    }
+    class TestCallee {
+      items: Item[] = [{ value: 1 }, { value: 2 }, { value: 3 }];
+      bump(item: Item) {
+        item.value++;
+      }
+    }
+    const original = new TestCallee();
+    calleeBroker.injectAgent(agentKey, original);
+    await callerBroker.useAgent<TestCallee>(agentKey, (target) => {
+      target.items.forEach((item) => {
+        target.bump(item);
+      });
+    });
+    expect(original.items).toEqual([{ value: 2 }, { value: 3 }, { value: 4 }]);
+    await callerBroker.useAgent<TestCallee>(agentKey, (target, { Math }) => {
+      target.items.forEach((item) => {
+        item.value = Math.multiply(2, item.value);
+      });
+    });
+    expect(original.items).toEqual([{ value: 4 }, { value: 6 }, { value: 8 }]);
+  });
 });

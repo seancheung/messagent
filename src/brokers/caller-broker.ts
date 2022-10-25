@@ -1,5 +1,5 @@
 import { IAdapter, IObject } from '../adapters';
-import { CallerAgent, MathObject } from '../agents';
+import { CallerAgent, MathHelper } from '../agents';
 import { IRegistrar } from '../registrars';
 import { DefaultRegistrar } from '../registrars/default-registrar';
 import { nextTick } from '../utils';
@@ -174,6 +174,6 @@ export namespace CallerBroker {
   export type EventHandler = (payload?: any) => void;
   export type ResponseHandler = (error?: Error, payload?: any) => void;
   export interface Helpers {
-    Math: MathObject;
+    Math: MathHelper;
   }
 }

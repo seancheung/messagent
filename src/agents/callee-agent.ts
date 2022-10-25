@@ -3,50 +3,50 @@ import {
   ClosureArgument,
   Expression,
   getBrokerMessageType,
+  IntermediateValue,
   MixedExpression,
-  ReferencedValue,
   ReturnExpression,
+  StackExpression,
+  StackValue,
   SyncExpression,
-  TargetExpression,
 } from './agent';
 
-function isTargetExpression(exp: Expression): exp is TargetExpression {
-  return typeof (exp as TargetExpression)?.target === 'number';
+function isStackExpression(exp: Expression): exp is StackExpression {
+  return typeof (exp as StackExpression)?.stack === 'number';
 }
 
-function isRefValue(value: unknown): value is ReferencedValue {
+function isIntermediate(value: unknown): value is IntermediateValue {
   return (
     value != null &&
     typeof value === 'object' &&
-    typeof (value as ReferencedValue).$$scope === 'number' &&
-    typeof (value as ReferencedValue).$$var === 'number'
+    typeof (value as IntermediateValue).$$type === 'string'
   );
+}
+
+function isStackValue(value: unknown): value is StackValue {
+  return isIntermediate(value) && value.$$type === 'stack';
 }
 
 function isClosureArgument(value: unknown): value is ClosureArgument {
-  return (
-    value != null &&
-    typeof value === 'object' &&
-    (value as ClosureArgument).$$type === 'closure'
-  );
+  return isIntermediate(value) && value.$$type === 'closure';
 }
 
-interface CalleeAgentRunnerOptions {
+interface CalleeAgentScopeOptions {
   target?: any;
-  scopeIndex: number;
-  parentScope?: CalleeAgentRunner;
+  scopeId: number;
+  parentScope?: CalleeAgentScope;
   params?: any[];
 }
-class CalleeAgentRunner {
+class CalleeAgentScope {
   protected readonly stack: any[] = [];
-  protected readonly scopeIndex: number;
+  protected readonly scopeId: number;
   protected readonly target?: any;
-  protected readonly parentScope?: CalleeAgentRunner;
+  protected readonly parentScope?: CalleeAgentScope;
   protected readonly params?: any[];
 
-  constructor(options: CalleeAgentRunnerOptions) {
+  constructor(options: CalleeAgentScopeOptions) {
     this.target = options.target;
-    this.scopeIndex = options.scopeIndex;
+    this.scopeId = options.scopeId;
     this.parentScope = options.parentScope;
     this.params = options.params;
   }
@@ -70,7 +70,7 @@ class CalleeAgentRunner {
   }
 
   execSync(exp: Exclude<SyncExpression, ReturnExpression>) {
-    const target = this.resolveTargetVar(exp);
+    const target = this.resolveStackValue(exp);
     let value: any;
     switch (exp.type) {
       case 'get':
@@ -92,8 +92,8 @@ class CalleeAgentRunner {
             args = args.map((arg) => {
               if (isClosureArgument(arg)) {
                 return (...params: any[]) => {
-                  const closure = new CalleeAgentRunner({
-                    scopeIndex: this.scopeIndex + 1,
+                  const closure = new CalleeAgentScope({
+                    scopeId: this.scopeId + 1,
                     parentScope: this,
                     params,
                   });
@@ -143,7 +143,7 @@ class CalleeAgentRunner {
   async execAsync(exp: Exclude<MixedExpression, ReturnExpression>) {
     switch (exp.type) {
       case 'async':
-        const target = this.resolveTargetVar(exp);
+        const target = this.resolveStackValue(exp);
         this.stack.push(await target);
         break;
       default:
@@ -152,23 +152,23 @@ class CalleeAgentRunner {
     }
   }
 
-  resolveScope(scope: number): CalleeAgentRunner {
+  resolveScope(id: number): CalleeAgentScope {
     // eslint-disable-next-line @typescript-eslint/no-this-alias
-    let runner: CalleeAgentRunner = this;
-    while (runner != null) {
-      if (runner.scopeIndex === scope) {
+    let scope: CalleeAgentScope = this;
+    while (scope != null) {
+      if (scope.scopeId === id) {
         break;
       }
-      runner = runner.parentScope;
+      scope = scope.parentScope;
     }
-    return runner;
+    return scope;
   }
 
-  resolveTargetVar(exp: Expression) {
-    if (isTargetExpression(exp)) {
-      const runner = this.resolveScope(exp.scope);
-      if (runner != null) {
-        return exp.target >= 0 ? runner.stack[exp.target] : runner.target;
+  resolveStackValue(exp: Expression) {
+    if (isStackExpression(exp)) {
+      const scope = this.resolveScope(exp.scope);
+      if (scope != null) {
+        return exp.stack >= 0 ? scope.stack[exp.stack] : scope.target;
       }
     }
   }
@@ -177,9 +177,9 @@ class CalleeAgentRunner {
     return value == null
       ? value
       : JSON.parse(JSON.stringify(value), (key, value) => {
-          if (isRefValue(value)) {
-            const runner = this.resolveScope(value.$$scope);
-            return runner == null ? value : runner.stack[value.$$var];
+          if (isStackValue(value)) {
+            const scope = this.resolveScope(value.$$scope);
+            return scope == null ? value : scope.stack[value.$$stack];
           }
           return value;
         });
@@ -199,11 +199,11 @@ export class CalleeAgent {
     _,
     payload: MixedExpression[],
   ) => {
-    const runner = new CalleeAgentRunner({
-      scopeIndex: 0,
+    const scope = new CalleeAgentScope({
+      scopeId: 0,
       target: this.target,
     });
-    const res = await runner.runAsync(payload);
+    const res = await scope.runAsync(payload);
     return res;
   };
 
