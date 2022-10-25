@@ -327,9 +327,11 @@ export class CallerAgent {
       };
       this.expressions.push(exp);
     }
+    // NOTE: this will call toJSON on each ReferencedValue
+    const payload = JSON.parse(JSON.stringify(this.expressions));
     return this.broker.request({
       type: getBrokerMessageType(this.targetKey),
-      payload: this.expressions,
+      payload,
     });
   }
 }
