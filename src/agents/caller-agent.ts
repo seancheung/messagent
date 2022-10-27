@@ -5,20 +5,26 @@ import {
   ArgumentExpression,
   AssignExpression,
   AsyncExpression,
-  ClosureArgument,
+  Closure,
+  CompareExpression,
+  CompareHelper,
   ConstructExpression,
   DeclareExpression,
   DelExpression,
   Expression,
   getBrokerMessageType,
   GetExpression,
+  IfExpression,
+  LogicFlowHelper,
   MathExpression,
   MathHelper,
   ReturnExpression,
   SetExpression,
   StackExpression,
   StackValue,
-  VarHelper as VariableHelper,
+  ValueCheckExpression,
+  ValueCheckHelper,
+  VariableHelper,
 } from './agent';
 
 const CallableTarget = function () {};
@@ -105,47 +111,6 @@ class CallerAgentProxyHandler implements ProxyHandler<any> {
     );
   }
 
-  protected useScope(scope: CallerAgentScope, func: () => void) {
-    const prevScope = this.scopeRef.current;
-    this.scopeRef.current = scope;
-    func();
-    this.scopeRef.current = prevScope;
-  }
-
-  protected createClosure(func: (...args: any[]) => any) {
-    const len = func.length;
-    const scopeId = this.scopeRef.current.id + 1;
-    const scope = new CallerAgentScope(scopeId);
-    const args = Array(len)
-      .fill(null)
-      .map((_, i) => {
-        const stackRef = scope.pushToStack<ArgumentExpression>({
-          type: 'arg',
-          index: i,
-        });
-        return createProxy(
-          new CallerAgentProxyHandler(this.scopeRef, {
-            ...stackRef,
-          }),
-        );
-      });
-    // NOTE: for context hook usage
-    let returnValue: any;
-    this.useScope(scope, () => {
-      returnValue = func(...args);
-    });
-    const returnExp: ReturnExpression = {
-      type: 'return',
-      value: returnValue,
-    };
-    scope.stack.push(returnExp);
-    const closure: ClosureArgument = {
-      $$type: 'closure',
-      $$exps: scope.stack,
-    };
-    return closure;
-  }
-
   protected toPromise(
     resolve: (value: any) => any,
     reject: (reason: any) => any,
@@ -223,7 +188,7 @@ class CallerAgentProxyHandler implements ProxyHandler<any> {
         }
         if (typeof arg === 'function') {
           // NOTE: Proxy type is the same as CallableTarget
-          return this.createClosure(arg);
+          return createClosure(this.scopeRef, arg);
         }
         return arg;
       });
@@ -265,6 +230,9 @@ export class CallerAgent {
     return {
       Math: createMathHelper(this.scopeRef),
       ...createVariableHelper(this.scopeRef),
+      ...createCompareHelper(this.scopeRef),
+      ...createValueCheckHelper(this.scopeRef),
+      ...createLogicFlowHelper(this.scopeRef),
     };
   }
 
@@ -291,7 +259,11 @@ export namespace CallerAgent {
     targetKey: string;
     broker: CallerBroker;
   }
-  export interface Helpers extends VariableHelper {
+  export interface Helpers
+    extends VariableHelper,
+      CompareHelper,
+      ValueCheckHelper,
+      LogicFlowHelper {
     Math: MathHelper;
   }
 }
@@ -309,6 +281,54 @@ function createProxy(handler: CallerAgentProxyHandler) {
   return new Proxy(CallableTarget, handler);
 }
 
+function useScope(
+  scopeRef: RefObject<CallerAgentScope>,
+  scope: CallerAgentScope,
+  func: () => void,
+) {
+  const prevScope = scopeRef.current;
+  scopeRef.current = scope;
+  func();
+  scopeRef.current = prevScope;
+}
+
+function createClosure(
+  scopeRef: RefObject<CallerAgentScope>,
+  func: (...args: any[]) => any,
+): Closure {
+  const len = func.length;
+  const scopeId = scopeRef.current.id + 1;
+  const scope = new CallerAgentScope(scopeId);
+  const args = Array(len)
+    .fill(null)
+    .map((_, i) => {
+      const stackRef = scope.pushToStack<ArgumentExpression>({
+        type: 'arg',
+        index: i,
+      });
+      return createProxy(
+        new CallerAgentProxyHandler(scopeRef, {
+          ...stackRef,
+        }),
+      );
+    });
+  // NOTE: for context hook usage
+  let returnValue: any;
+  useScope(scopeRef, scope, () => {
+    returnValue = func(...args);
+  });
+  const returnExp: ReturnExpression = {
+    type: 'return',
+    value: returnValue,
+  };
+  scope.stack.push(returnExp);
+  const closure: Closure = {
+    $$type: 'closure',
+    $$exps: scope.stack,
+  };
+  return closure;
+}
+
 function createMathHelper(scopeRef: RefObject<CallerAgentScope>): MathHelper {
   const operators: (keyof MathHelper)[] = [
     'add',
@@ -323,7 +343,7 @@ function createMathHelper(scopeRef: RefObject<CallerAgentScope>): MathHelper {
         const scope = scopeRef.current;
         if (!scope) {
           throw new Error(
-            `\`Math.${operator}\` must be used inside Agent callback function`,
+            `\`Math.${operator}\` must be used inside Agent function`,
           );
         }
         const stackRef = scope.pushToStack<MathExpression>({
@@ -347,9 +367,7 @@ function createVariableHelper(
     declareVar: (initialValue) => {
       const scope = scopeRef.current;
       if (!scope) {
-        throw new Error(
-          '`declareVar` must be used inside Agent callback function',
-        );
+        throw new Error('`declareVar` must be used inside Agent function');
       }
       const stackRef = scope.pushToStack<DeclareExpression>({
         type: 'declare',
@@ -362,9 +380,7 @@ function createVariableHelper(
     assignVar: (variable, newValue) => {
       const scope = scopeRef.current;
       if (!scope) {
-        throw new Error(
-          '`assignVar` must be used inside Agent callback function',
-        );
+        throw new Error('`assignVar` must be used inside Agent function');
       }
       if (!(variable instanceof CallerAgentProxyHandler)) {
         throw new Error('target variable is not assignable');
@@ -375,6 +391,92 @@ function createVariableHelper(
         varScope,
         varStack,
         newValue,
+      });
+      return createProxy(
+        new CallerAgentProxyHandler(scopeRef, { ...stackRef }),
+      );
+    },
+  };
+}
+
+function createCompareHelper(
+  scopeRef: RefObject<CallerAgentScope>,
+): CompareHelper {
+  const operators: (keyof CompareHelper)[] = ['eq', 'gt', 'gte', 'lt', 'lte'];
+  return Object.fromEntries(
+    operators.map((operator) => [
+      operator,
+      (x: number, y: number, strict?: boolean) => {
+        const scope = scopeRef.current;
+        if (!scope) {
+          throw new Error(`\`${operator}\` must be used inside Agent function`);
+        }
+        const stackRef = scope.pushToStack<CompareExpression>({
+          type: 'compare',
+          operator,
+          x,
+          y,
+          strict,
+        });
+        return createProxy(
+          new CallerAgentProxyHandler(scopeRef, { ...stackRef }),
+        );
+      },
+    ]),
+  ) as any;
+}
+
+function createValueCheckHelper(
+  scopeRef: RefObject<CallerAgentScope>,
+): ValueCheckHelper {
+  const operators: (keyof ValueCheckHelper)[] = [
+    'isNull',
+    'isUndefined',
+    'isString',
+    'isNumber',
+    'isBoolean',
+    'isObject',
+    'isFunction',
+    'isNaN',
+    'not',
+    'notNot',
+    '$typeof',
+  ];
+  return Object.fromEntries(
+    operators.map((operator) => [
+      operator,
+      (value: any) => {
+        const scope = scopeRef.current;
+        if (!scope) {
+          throw new Error(`\`${operator}\` must be used inside Agent function`);
+        }
+        const stackRef = scope.pushToStack<ValueCheckExpression>({
+          type: 'check',
+          operator,
+          value,
+        });
+        return createProxy(
+          new CallerAgentProxyHandler(scopeRef, { ...stackRef }),
+        );
+      },
+    ]),
+  ) as any;
+}
+
+function createLogicFlowHelper(
+  scopeRef: RefObject<CallerAgentScope>,
+): LogicFlowHelper {
+  return {
+    $if: (cond, $then, $else) => {
+      const scope = scopeRef.current;
+      if (!scope) {
+        throw new Error('`$if` must be used inside Agent function');
+      }
+      const stackRef = scope.pushToStack<IfExpression>({
+        type: 'if',
+        cond,
+        then: createClosure(scopeRef, $then),
+        else: $else == null ? undefined : createClosure(scopeRef, $else),
       });
       return createProxy(
         new CallerAgentProxyHandler(scopeRef, { ...stackRef }),

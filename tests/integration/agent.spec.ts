@@ -96,27 +96,27 @@ describe('test agents', () => {
     }
     const original = new TestCallee();
     calleeBroker.injectAgent(agentKey, original);
-    const res1 = await callerBroker.useAgent<TestCallee, number>(
-      agentKey,
-      (target) => {
+    expect(
+      await callerBroker.useAgent<TestCallee, number>(agentKey, (target) => {
         return target.item.id;
-      },
-    );
-    expect(res1).toEqual(1);
-    const res2 = await callerBroker.useAgent<TestCallee, NestedCallee>(
-      agentKey,
-      (target) => {
-        return target.item;
-      },
-    );
-    expect(res2).toEqual({ id: 1 });
-    const res3 = await callerBroker.useAgent<TestCallee, NestedCallee[]>(
-      agentKey,
-      (target) => {
-        return target.items;
-      },
-    );
-    expect(res3).toBeInstanceOf(Array);
+      }),
+    ).toEqual(1);
+    expect(
+      await callerBroker.useAgent<TestCallee, NestedCallee>(
+        agentKey,
+        (target) => {
+          return target.item;
+        },
+      ),
+    ).toEqual({ id: 1 });
+    expect(
+      await callerBroker.useAgent<TestCallee, NestedCallee[]>(
+        agentKey,
+        (target) => {
+          return target.items;
+        },
+      ),
+    ).toBeInstanceOf(Array);
     await callerBroker.useAgent<TestCallee>(agentKey, (target) => {
       target.spawn(3);
     });
@@ -295,5 +295,197 @@ describe('test agents', () => {
       },
     );
     expect(res).toEqual(item);
+  });
+
+  test('test compare', async () => {
+    const agentKey = 'test-compare';
+    class TestCallee {
+      w = '1';
+      x = 1;
+      y = 2;
+      z = 2;
+    }
+    const original = new TestCallee();
+    calleeBroker.injectAgent(agentKey, original);
+    expect(
+      await callerBroker.useAgent<TestCallee, [boolean, boolean]>(
+        agentKey,
+        (target, { eq }) => {
+          return [eq(target.w, target.x), eq(target.w, target.x, true)];
+        },
+      ),
+    ).toEqual([true, false]);
+    expect(
+      await callerBroker.useAgent<TestCallee, [boolean, boolean]>(
+        agentKey,
+        (target, { gt }) => {
+          return [gt(target.x, target.y), gt(target.y, target.x)];
+        },
+      ),
+    ).toEqual([false, true]);
+    expect(
+      await callerBroker.useAgent<TestCallee, [boolean, boolean, boolean]>(
+        agentKey,
+        (target, { gte }) => {
+          return [
+            gte(target.x, target.y),
+            gte(target.y, target.z),
+            gte(target.z, target.x),
+          ];
+        },
+      ),
+    ).toEqual([false, true, true]);
+    expect(
+      await callerBroker.useAgent<TestCallee, [boolean, boolean]>(
+        agentKey,
+        (target, { lt }) => {
+          return [lt(target.x, target.y), lt(target.y, target.x)];
+        },
+      ),
+    ).toEqual([true, false]);
+    expect(
+      await callerBroker.useAgent<TestCallee, [boolean, boolean, boolean]>(
+        agentKey,
+        (target, { lte }) => {
+          return [
+            lte(target.x, target.y),
+            lte(target.y, target.z),
+            lte(target.z, target.x),
+          ];
+        },
+      ),
+    ).toEqual([true, true, false]);
+  });
+
+  test('test value check', async () => {
+    const agentKey = 'test-compare';
+    class TestCallee {
+      a = null;
+      b: number;
+      c = '1';
+      d = 100;
+      e = true;
+      f = {};
+      g = () => {};
+      h = 'x1';
+    }
+    const original = new TestCallee();
+    calleeBroker.injectAgent(agentKey, original);
+    expect(
+      await callerBroker.useAgent(agentKey, (agent: TestCallee, { isNull }) => {
+        return [isNull(agent.a), isNull(agent.b), isNull(agent.c)];
+      }),
+    ).toEqual([true, true, false]);
+    expect(
+      await callerBroker.useAgent(
+        agentKey,
+        (agent: TestCallee, { isUndefined }) => {
+          return [
+            isUndefined(agent.a),
+            isUndefined(agent.b),
+            isUndefined(agent.c),
+          ];
+        },
+      ),
+    ).toEqual([false, true, false]);
+    expect(
+      await callerBroker.useAgent(
+        agentKey,
+        (agent: TestCallee, { isString }) => {
+          return [isString(agent.c), isString(agent.d)];
+        },
+      ),
+    ).toEqual([true, false]);
+    expect(
+      await callerBroker.useAgent(
+        agentKey,
+        (agent: TestCallee, { isNumber }) => {
+          return [isNumber(agent.c), isNumber(agent.d)];
+        },
+      ),
+    ).toEqual([false, true]);
+    expect(
+      await callerBroker.useAgent(
+        agentKey,
+        (agent: TestCallee, { isBoolean }) => {
+          return [isBoolean(agent.e), isBoolean(agent.d)];
+        },
+      ),
+    ).toEqual([true, false]);
+    expect(
+      await callerBroker.useAgent(
+        agentKey,
+        (agent: TestCallee, { isObject }) => {
+          return [isObject(agent.f), isObject(agent.e)];
+        },
+      ),
+    ).toEqual([true, false]);
+    expect(
+      await callerBroker.useAgent(
+        agentKey,
+        (agent: TestCallee, { isFunction }) => {
+          return [isFunction(agent.g), isFunction(agent.f)];
+        },
+      ),
+    ).toEqual([true, false]);
+    expect(
+      await callerBroker.useAgent(agentKey, (agent: TestCallee, { isNaN }) => {
+        return [isNaN(agent.c), isNaN(agent.h)];
+      }),
+    ).toEqual([false, true]);
+    expect(
+      await callerBroker.useAgent(agentKey, (agent: TestCallee, { not }) => {
+        return [not(agent.a), not(agent.e)];
+      }),
+    ).toEqual([true, false]);
+    expect(
+      await callerBroker.useAgent(agentKey, (agent: TestCallee, { notNot }) => {
+        return [notNot(agent.a), notNot(agent.e)];
+      }),
+    ).toEqual([false, true]);
+    expect(
+      await callerBroker.useAgent(
+        agentKey,
+        (agent: TestCallee, { $typeof }) => {
+          return [$typeof(agent.d), $typeof(agent.e)];
+        },
+      ),
+    ).toEqual(['number', 'boolean']);
+  });
+
+  test('test if', async () => {
+    const agentKey = 'test-compare';
+    class TestCallee {
+      success: boolean;
+      counter = 1;
+      increase() {
+        this.counter++;
+      }
+      decrease() {
+        this.counter--;
+      }
+    }
+    const original = new TestCallee();
+    calleeBroker.injectAgent(agentKey, original);
+    await callerBroker.useAgent<TestCallee>(agentKey, (agent, { $if }) => {
+      agent.success = true;
+      $if(agent.success, () => {
+        agent.increase();
+      });
+    });
+    expect(original.counter).toEqual(2);
+    await callerBroker.useAgent<TestCallee>(agentKey, (agent, { $if }) => {
+      agent.success = false;
+      $if(
+        agent.success,
+        () => {
+          agent.increase();
+        },
+        () => {
+          agent.decrease();
+        },
+      );
+    });
+    expect(original.counter).toEqual(1);
   });
 });

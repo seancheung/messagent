@@ -1,6 +1,6 @@
 import type { CalleeBroker } from '../brokers';
 import {
-  ClosureArgument,
+  Closure,
   Expression,
   getBrokerMessageType,
   IntermediateValue,
@@ -27,7 +27,7 @@ function isStackValue(value: unknown): value is StackValue {
   return isIntermediate(value) && value.$$type === 'stack';
 }
 
-function isClosureArgument(value: unknown): value is ClosureArgument {
+function isClosure(value: unknown): value is Closure {
   return isIntermediate(value) && value.$$type === 'closure';
 }
 
@@ -90,7 +90,7 @@ class CalleeAgentScope {
           let args: any[] = this.resolveValue(exp.args);
           if (args != null) {
             args = args.map((arg) => {
-              if (isClosureArgument(arg)) {
+              if (isClosure(arg)) {
                 return (...params: any[]) => {
                   const closure = new CalleeAgentScope({
                     scopeId: this.scopeId + 1,
@@ -127,7 +127,7 @@ class CalleeAgentScope {
               value = x / y;
               break;
             default:
-              value = NaN;
+              throw new Error('Unknown math operator');
           }
         }
         break;
@@ -142,6 +142,92 @@ class CalleeAgentScope {
           const scope = this.resolveScope(exp.varScope);
           if (scope && exp.varStack >= 0 && exp.varStack < scope.stack.length) {
             scope.stack[exp.varStack] = this.resolveValue(exp.newValue);
+          }
+        }
+        break;
+      case 'if':
+        {
+          if (isClosure(exp.then)) {
+            const cond = this.resolveValue(exp.cond);
+            if (cond) {
+              const closure = new CalleeAgentScope({
+                scopeId: this.scopeId + 1,
+                parentScope: this,
+              });
+              closure.runSync(exp.then.$$exps as SyncExpression[]);
+            } else if (isClosure(exp.else)) {
+              const closure = new CalleeAgentScope({
+                scopeId: this.scopeId + 1,
+                parentScope: this,
+              });
+              closure.runSync(exp.else.$$exps as SyncExpression[]);
+            }
+          }
+        }
+        break;
+      case 'compare':
+        {
+          const [x, y] = this.resolveValue([exp.x, exp.y]);
+          switch (exp.operator) {
+            case 'eq':
+              value = exp.strict ? x === y : x == y;
+              break;
+            case 'gt':
+              value = x > y;
+              break;
+            case 'gte':
+              value = x >= y;
+              break;
+            case 'lt':
+              value = x < y;
+              break;
+            case 'lte':
+              value = x <= y;
+              break;
+            default:
+              throw new Error('Unknown compare operator');
+          }
+        }
+        break;
+      case 'check':
+        {
+          const val = this.resolveValue(exp.value);
+          switch (exp.operator) {
+            case 'isNull':
+              value = val == null;
+              break;
+            case 'isUndefined':
+              value = typeof val === 'undefined';
+              break;
+            case 'isString':
+              value = typeof val === 'string';
+              break;
+            case 'isNumber':
+              value = typeof val === 'number';
+              break;
+            case 'isBoolean':
+              value = typeof val === 'boolean';
+              break;
+            case 'isObject':
+              value = typeof val === 'object';
+              break;
+            case 'isFunction':
+              value = typeof val === 'function';
+              break;
+            case 'isNaN':
+              value = isNaN(val);
+              break;
+            case 'not':
+              value = !val;
+              break;
+            case 'notNot':
+              value = !!val;
+              break;
+            case '$typeof':
+              value = typeof val;
+              break;
+            default:
+              throw new Error('Unknown check operator');
           }
         }
         break;

@@ -4,9 +4,43 @@ export interface MathHelper {
   multiply(x: number, y: number): number;
   divide(x: number, y: number): number;
 }
-export interface VarHelper {
+export interface VariableHelper {
   declareVar<T = any>(initialValue?: T): T;
   assignVar<T>(variable: T, newValue: T): void;
+}
+export interface LogicFlowHelper {
+  $if(cond: boolean, $then: () => void, $else?: () => void): void;
+}
+export interface CompareHelper {
+  eq(x: any, y: any, strict?: boolean): boolean;
+  gt(x: number, y: number): boolean;
+  gte(x: number, y: number): boolean;
+  lt(x: number, y: number): boolean;
+  lte(x: number, y: number): boolean;
+}
+export interface ValueCheckHelper {
+  isNull(value: any): value is null;
+  isUndefined(value: any): value is undefined;
+  isString(value: any): value is string;
+  isNumber(value: any): value is number;
+  isBoolean(value: any): value is boolean;
+  isObject(value: any): value is object;
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  isFunction(value: any): value is Function;
+  isNaN(value: any): boolean;
+  not(value: any): boolean;
+  notNot(value: any): boolean;
+  $typeof(
+    value: any,
+  ):
+    | 'string'
+    | 'number'
+    | 'bigint'
+    | 'boolean'
+    | 'symbol'
+    | 'undefined'
+    | 'object'
+    | 'function';
 }
 
 export interface Expression {
@@ -64,6 +98,24 @@ export interface AssignExpression extends Expression {
   varStack: number;
   newValue?: any;
 }
+export interface CompareExpression extends Expression {
+  type: 'compare';
+  operator: keyof CompareHelper;
+  x: any;
+  y: any;
+  strict?: boolean;
+}
+export interface ValueCheckExpression extends Expression {
+  type: 'check';
+  operator: keyof ValueCheckHelper;
+  value: any;
+}
+export interface IfExpression extends Expression {
+  type: 'if';
+  cond: any;
+  then: Closure;
+  else?: Closure;
+}
 export type SyncExpression =
   | GetExpression
   | SetExpression
@@ -74,7 +126,10 @@ export type SyncExpression =
   | MathExpression
   | ArgumentExpression
   | DeclareExpression
-  | AssignExpression;
+  | AssignExpression
+  | CompareExpression
+  | ValueCheckExpression
+  | IfExpression;
 export type MixedExpression = SyncExpression | AsyncExpression;
 
 export interface IntermediateValue {
@@ -85,7 +140,7 @@ export interface StackValue extends IntermediateValue {
   $$scope: number;
   $$stack: number;
 }
-export interface ClosureArgument extends IntermediateValue {
+export interface Closure extends IntermediateValue {
   $$type: 'closure';
   $$exps: Expression[];
 }
