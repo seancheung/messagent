@@ -270,4 +270,30 @@ describe('test agents', () => {
     });
     expect(original.items).toEqual([{ value: 4 }, { value: 6 }, { value: 8 }]);
   });
+
+  test('test var', async () => {
+    const agentKey = 'test-var';
+    interface Item {
+      value: number;
+    }
+    const item: Item = { value: 1 };
+    class TestCallee {
+      fetch(cb: (data: Item) => void) {
+        cb(item);
+      }
+    }
+    const original = new TestCallee();
+    calleeBroker.injectAgent(agentKey, original);
+    const res = await callerBroker.useAgent<TestCallee, Item>(
+      agentKey,
+      (target, { declareVar, assignVar }) => {
+        const item = declareVar<Item>();
+        target.fetch((data) => {
+          assignVar(item, data);
+        });
+        return item;
+      },
+    );
+    expect(res).toEqual(item);
+  });
 });

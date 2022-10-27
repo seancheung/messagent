@@ -131,8 +131,19 @@ class CalleeAgentScope {
           }
         }
         break;
-      case 'var':
+      case 'arg':
         value = this.params?.[exp.index];
+        break;
+      case 'declare':
+        value = this.resolveValue(exp.value);
+        break;
+      case 'assign':
+        {
+          const scope = this.resolveScope(exp.varScope);
+          if (scope && exp.varStack >= 0 && exp.varStack < scope.stack.length) {
+            scope.stack[exp.varStack] = this.resolveValue(exp.newValue);
+          }
+        }
         break;
       default:
         throw new Error('Unknown expression');

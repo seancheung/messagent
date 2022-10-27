@@ -3,9 +3,11 @@ import type { CallerBroker } from '../brokers';
 import {
   ApplyExpression,
   ArgumentExpression,
+  AssignExpression,
   AsyncExpression,
   ClosureArgument,
   ConstructExpression,
+  DeclareExpression,
   DelExpression,
   Expression,
   getBrokerMessageType,
@@ -16,53 +18,10 @@ import {
   SetExpression,
   StackExpression,
   StackValue,
+  VarHelper as VariableHelper,
 } from './agent';
 
 const CallableTarget = function () {};
-
-function createProxy(handler: CallerAgentProxyHandler) {
-  return new Proxy(CallableTarget, handler);
-}
-
-function createMathHelper(scopeRef: RefObject<CallerAgentScope>): MathHelper {
-  const operators: (keyof MathHelper)[] = [
-    'add',
-    'subtract',
-    'multiply',
-    'divide',
-  ];
-  return Object.fromEntries(
-    operators.map((operator) => [
-      operator,
-      (x: number, y: number) => {
-        const scope = scopeRef.current;
-        if (!scope) {
-          throw new Error(
-            `Math.${operator} must be used inside Agent callback function`,
-          );
-        }
-        const stackRef = scope.pushToStack<MathExpression>({
-          type: 'math',
-          operator,
-          x,
-          y,
-        });
-        return createProxy(
-          new CallerAgentProxyHandler(scopeRef, { ...stackRef }),
-        );
-      },
-    ]),
-  ) as any;
-}
-
-function isPromise(value: unknown): value is Promise<any> {
-  return (
-    typeof value != null &&
-    typeof value == 'object' &&
-    !(value instanceof CallerAgentProxyHandler) &&
-    typeof (value as Promise<any>).then === 'function'
-  );
-}
 
 class CallerAgentScope {
   readonly id: number;
@@ -161,7 +120,7 @@ class CallerAgentProxyHandler implements ProxyHandler<any> {
       .fill(null)
       .map((_, i) => {
         const stackRef = scope.pushToStack<ArgumentExpression>({
-          type: 'var',
+          type: 'arg',
           index: i,
         });
         return createProxy(
@@ -200,7 +159,7 @@ class CallerAgentProxyHandler implements ProxyHandler<any> {
     return Promise.resolve(stackRef).then(resolve).catch(reject);
   }
 
-  protected toJSON(): StackValue {
+  toJSON(): StackValue {
     return {
       $$type: 'stack',
       $$scope: this.scopeId,
@@ -302,8 +261,11 @@ export class CallerAgent {
     return this.handler.toProxy();
   }
 
-  getMathObject() {
-    return createMathHelper(this.scopeRef);
+  getHelpers(): CallerAgent.Helpers {
+    return {
+      Math: createMathHelper(this.scopeRef),
+      ...createVariableHelper(this.scopeRef),
+    };
   }
 
   async resolve(ret?: any): Promise<any> {
@@ -329,4 +291,94 @@ export namespace CallerAgent {
     targetKey: string;
     broker: CallerBroker;
   }
+  export interface Helpers extends VariableHelper {
+    Math: MathHelper;
+  }
+}
+
+function isPromise(value: unknown): value is Promise<any> {
+  return (
+    typeof value != null &&
+    typeof value == 'object' &&
+    !(value instanceof CallerAgentProxyHandler) &&
+    typeof (value as Promise<any>).then === 'function'
+  );
+}
+
+function createProxy(handler: CallerAgentProxyHandler) {
+  return new Proxy(CallableTarget, handler);
+}
+
+function createMathHelper(scopeRef: RefObject<CallerAgentScope>): MathHelper {
+  const operators: (keyof MathHelper)[] = [
+    'add',
+    'subtract',
+    'multiply',
+    'divide',
+  ];
+  return Object.fromEntries(
+    operators.map((operator) => [
+      operator,
+      (x: number, y: number) => {
+        const scope = scopeRef.current;
+        if (!scope) {
+          throw new Error(
+            `\`Math.${operator}\` must be used inside Agent callback function`,
+          );
+        }
+        const stackRef = scope.pushToStack<MathExpression>({
+          type: 'math',
+          operator,
+          x,
+          y,
+        });
+        return createProxy(
+          new CallerAgentProxyHandler(scopeRef, { ...stackRef }),
+        );
+      },
+    ]),
+  ) as any;
+}
+
+function createVariableHelper(
+  scopeRef: RefObject<CallerAgentScope>,
+): VariableHelper {
+  return {
+    declareVar: (initialValue) => {
+      const scope = scopeRef.current;
+      if (!scope) {
+        throw new Error(
+          '`declareVar` must be used inside Agent callback function',
+        );
+      }
+      const stackRef = scope.pushToStack<DeclareExpression>({
+        type: 'declare',
+        value: initialValue,
+      });
+      return createProxy(
+        new CallerAgentProxyHandler(scopeRef, { ...stackRef }),
+      );
+    },
+    assignVar: (variable, newValue) => {
+      const scope = scopeRef.current;
+      if (!scope) {
+        throw new Error(
+          '`assignVar` must be used inside Agent callback function',
+        );
+      }
+      if (!(variable instanceof CallerAgentProxyHandler)) {
+        throw new Error('target variable is not assignable');
+      }
+      const { $$scope: varScope, $$stack: varStack } = variable.toJSON();
+      const stackRef = scope.pushToStack<AssignExpression>({
+        type: 'assign',
+        varScope,
+        varStack,
+        newValue,
+      });
+      return createProxy(
+        new CallerAgentProxyHandler(scopeRef, { ...stackRef }),
+      );
+    },
+  };
 }

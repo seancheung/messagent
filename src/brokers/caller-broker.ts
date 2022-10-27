@@ -1,5 +1,5 @@
 import { IAdapter, IObject } from '../adapters';
-import { CallerAgent, MathHelper } from '../agents';
+import { CallerAgent } from '../agents';
 import { IRegistrar } from '../registrars';
 import { DefaultRegistrar } from '../registrars/default-registrar';
 import { nextTick } from '../utils';
@@ -137,12 +137,12 @@ export class CallerBroker extends Broker {
    */
   async useAgent<T extends IObject, R = void>(
     key: string,
-    func: (target: T, helpers: CallerBroker.Helpers) => R | Promise<R>,
+    func: (target: T, helpers: CallerAgent.Helpers) => R | Promise<R>,
   ): Promise<R> {
     const agent = new CallerAgent({ targetKey: key, broker: this });
     const target = agent.getProxiedTarget();
-    const math = agent.getMathObject();
-    const ret = func(target, { Math: math });
+    const helpers = agent.getHelpers();
+    const ret = func(target, helpers);
     return agent.resolve(ret);
   }
 
@@ -173,7 +173,4 @@ export namespace CallerBroker {
   }
   export type EventHandler = (payload?: any) => void;
   export type ResponseHandler = (error?: Error, payload?: any) => void;
-  export interface Helpers {
-    Math: MathHelper;
-  }
 }

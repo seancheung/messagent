@@ -4,6 +4,10 @@ export interface MathHelper {
   multiply(x: number, y: number): number;
   divide(x: number, y: number): number;
 }
+export interface VarHelper {
+  declareVar<T = any>(initialValue?: T): T;
+  assignVar<T>(variable: T, newValue: T): void;
+}
 
 export interface Expression {
   type: string;
@@ -47,8 +51,18 @@ export interface AsyncExpression extends StackExpression {
   type: 'async';
 }
 export interface ArgumentExpression extends Expression {
-  type: 'var';
+  type: 'arg';
   index: number;
+}
+export interface DeclareExpression extends Expression {
+  type: 'declare';
+  value?: any;
+}
+export interface AssignExpression extends Expression {
+  type: 'assign';
+  varScope: number;
+  varStack: number;
+  newValue?: any;
 }
 export type SyncExpression =
   | GetExpression
@@ -58,7 +72,9 @@ export type SyncExpression =
   | ApplyExpression
   | ReturnExpression
   | MathExpression
-  | ArgumentExpression;
+  | ArgumentExpression
+  | DeclareExpression
+  | AssignExpression;
 export type MixedExpression = SyncExpression | AsyncExpression;
 
 export interface IntermediateValue {
