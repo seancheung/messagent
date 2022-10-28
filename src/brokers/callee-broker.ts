@@ -137,8 +137,9 @@ export class CalleeBroker extends Broker {
    * Inject agent
    * @param key Agent key
    * @param target Agent target
+   * @returns Eject agent funtion
    */
-  injectAgent(key: string, target: any): void {
+  injectAgent(key: string, target: any): () => void {
     if (this.agents.has(key)) {
       throw new Error('Agent key conflict');
     }
@@ -148,6 +149,10 @@ export class CalleeBroker extends Broker {
     });
     agent.inject();
     this.agents.set(key, agent);
+    return () => {
+      agent.eject();
+      this.agents.delete(key);
+    };
   }
 
   /**
@@ -161,23 +166,11 @@ export class CalleeBroker extends Broker {
   }
 
   /**
-   * Add plugin
-   * @param plugin Plugin
-   */
-  use(plugin: CalleeBroker.Plugin) {
-    plugin(this);
-  }
-
-  /**
    * Reset data
    */
   reset() {
     this.handlers.clear();
     this.agents.clear();
-  }
-
-  dispose(): void {
-    super.dispose();
   }
 }
 

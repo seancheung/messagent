@@ -154,10 +154,6 @@ export class CallerBroker extends Broker {
     this.responseHandlers.clear();
     this.registrar.reset();
   }
-
-  dispose() {
-    super.dispose();
-  }
 }
 
 export namespace CallerBroker {

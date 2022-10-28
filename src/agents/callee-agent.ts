@@ -11,8 +11,14 @@ import {
   SyncExpression,
 } from './agent';
 
+function isExpression(exp: Expression): exp is Expression {
+  return typeof (exp as Expression)?.type === 'string';
+}
+
 function isStackExpression(exp: Expression): exp is StackExpression {
-  return typeof (exp as StackExpression)?.stack === 'number';
+  return (
+    isExpression(exp) && typeof (exp as StackExpression)?.stack === 'number'
+  );
 }
 
 function isIntermediate(value: unknown): value is IntermediateValue {
@@ -97,7 +103,9 @@ class CalleeAgentScope {
                     parentScope: this,
                     params,
                   });
-                  // NOTE: async callback is not supported
+                  if (arg.$$async) {
+                    return closure.runAsync(arg.$$exps as MixedExpression[]);
+                  }
                   return closure.runSync(arg.$$exps as SyncExpression[]);
                 };
               }
@@ -147,6 +155,7 @@ class CalleeAgentScope {
         break;
       case 'if':
         {
+          // NOTE: async then/else is not supported in sync function
           if (isClosure(exp.then)) {
             const cond = this.resolveValue(exp.cond);
             if (cond) {
@@ -242,6 +251,32 @@ class CalleeAgentScope {
       case 'async':
         const target = this.resolveStackValue(exp);
         this.stack.push(await target);
+        break;
+      case 'if':
+        {
+          if (isClosure(exp.then)) {
+            const cond = this.resolveValue(exp.cond);
+            if (cond) {
+              const closure = new CalleeAgentScope({
+                scopeId: this.scopeId + 1,
+                parentScope: this,
+              });
+              if (exp.then.$$async) {
+                await closure.runAsync(exp.then.$$exps as MixedExpression[]);
+              }
+              closure.runSync(exp.then.$$exps as SyncExpression[]);
+            } else if (isClosure(exp.else)) {
+              const closure = new CalleeAgentScope({
+                scopeId: this.scopeId + 1,
+                parentScope: this,
+              });
+              if (exp.else.$$async) {
+                await closure.runAsync(exp.else.$$exps as MixedExpression[]);
+              }
+              closure.runSync(exp.else.$$exps as SyncExpression[]);
+            }
+          }
+        }
         break;
       default:
         this.execSync(exp);

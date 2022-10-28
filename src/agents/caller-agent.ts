@@ -31,7 +31,7 @@ const CallableTarget = function () {};
 
 class CallerAgentScope {
   readonly id: number;
-  readonly stack: Expression[] = [];
+  readonly syntaxTree: Expression[] = [];
 
   /**
    * Create a new Scope
@@ -42,30 +42,36 @@ class CallerAgentScope {
   }
 
   /**
-   * Push the expression to the stack in this scope
+   * Add the expression to the syntax tree in this scope
    * @param exp Expression partial
    * @returns StackRef object
    */
-  pushToStack<T extends Expression>(exp: T): StackRef {
-    this.stack.push(exp);
+  addExpression<T extends Expression>(exp: T): StackRef {
+    this.syntaxTree.push(exp);
     return {
       scopeId: this.id,
-      stackId: this.stack.length - 1,
+      stackId: this.syntaxTree.length - 1,
     };
   }
 
   /**
-   * Get normalized stack array
-   * @returns Normalized stack array
+   * Get normalized syntax tree
+   * @returns Normalized syntax tree
    * @description This will call `toJSON` on each intermediate object
    */
-  printStack(): JSONArray {
-    return JSON.parse(JSON.stringify(this.stack));
+  printTree(): JSONArray {
+    return JSON.parse(JSON.stringify(this.syntaxTree));
   }
 }
 
 interface StackRef {
+  /**
+   * Scope index the value
+   */
   scopeId: number;
+  /**
+   * Stack index of the value
+   */
   stackId: number;
 }
 
@@ -93,19 +99,19 @@ class CallerAgentProxyHandler implements ProxyHandler<any> {
     this.isResolved = options.isResolved;
   }
 
-  protected pushToStack<T extends StackExpression>(
+  protected addExpression<T extends StackExpression>(
     exp: Omit<T, Exclude<keyof StackExpression, keyof Expression>>,
     options?: CallerAgentProxyHandlerOverridableOptions,
   ): any {
     const scope = this.scopeRef.current;
-    const next = scope.pushToStack({
+    const nextRef = scope.addExpression({
       ...exp,
       stack: this.stackId,
       scope: this.scopeId,
     });
     return createProxy(
       new CallerAgentProxyHandler(this.scopeRef, {
-        ...next,
+        ...nextRef,
         ...options,
       }),
     );
@@ -115,13 +121,13 @@ class CallerAgentProxyHandler implements ProxyHandler<any> {
     resolve: (value: any) => any,
     reject: (reason: any) => any,
   ) {
-    const stackRef = this.pushToStack<AsyncExpression>(
+    const nextProxy = this.addExpression<AsyncExpression>(
       {
         type: 'async',
       },
       { isResolved: true },
     );
-    return Promise.resolve(stackRef).then(resolve).catch(reject);
+    return Promise.resolve(nextProxy).then(resolve).catch(reject);
   }
 
   toJSON(): StackValue {
@@ -149,7 +155,7 @@ class CallerAgentProxyHandler implements ProxyHandler<any> {
     if (p === 'toJSON') {
       return this.toJSON.bind(this);
     }
-    return this.pushToStack<GetExpression>({
+    return this.addExpression<GetExpression>({
       type: 'get',
       p,
     });
@@ -159,7 +165,7 @@ class CallerAgentProxyHandler implements ProxyHandler<any> {
     if (typeof p === 'symbol') {
       return Reflect.set(this, p, newValue, this);
     }
-    this.pushToStack<SetExpression>({ type: 'set', p, newValue });
+    this.addExpression<SetExpression>({ type: 'set', p, newValue });
     // NOTE: always true since the actual execution is deferred
     return true;
   }
@@ -168,13 +174,13 @@ class CallerAgentProxyHandler implements ProxyHandler<any> {
     if (typeof p === 'symbol') {
       return Reflect.deleteProperty(this, p);
     }
-    this.pushToStack<DelExpression>({ type: 'del', p });
+    this.addExpression<DelExpression>({ type: 'del', p });
     // NOTE: always true since the actual execution is deferred
     return true;
   }
 
   construct(target: any, argArray: any[]): object {
-    return this.pushToStack<ConstructExpression>({
+    return this.addExpression<ConstructExpression>({
       type: 'new',
       args: argArray,
     });
@@ -193,7 +199,10 @@ class CallerAgentProxyHandler implements ProxyHandler<any> {
         return arg;
       });
     }
-    return this.pushToStack<ApplyExpression>({ type: 'apply', args: argArray });
+    return this.addExpression<ApplyExpression>({
+      type: 'apply',
+      args: argArray,
+    });
   }
 
   getPrototypeOf(): object {
@@ -245,9 +254,9 @@ export class CallerAgent {
         type: 'return',
         value: ret,
       };
-      this.scope.stack.push(exp);
+      this.scope.syntaxTree.push(exp);
     }
-    const payload = this.scope.printStack();
+    const payload = this.scope.printTree();
     return this.broker.request({
       type: getBrokerMessageType(this.targetKey),
       payload,
@@ -302,7 +311,7 @@ function createClosure(
   const args = Array(len)
     .fill(null)
     .map((_, i) => {
-      const stackRef = scope.pushToStack<ArgumentExpression>({
+      const stackRef = scope.addExpression<ArgumentExpression>({
         type: 'arg',
         index: i,
       });
@@ -321,10 +330,11 @@ function createClosure(
     type: 'return',
     value: returnValue,
   };
-  scope.stack.push(returnExp);
+  scope.syntaxTree.push(returnExp);
   const closure: Closure = {
     $$type: 'closure',
-    $$exps: scope.stack,
+    $$exps: scope.syntaxTree,
+    $$async: isPromise(returnValue),
   };
   return closure;
 }
@@ -346,7 +356,7 @@ function createMathHelper(scopeRef: RefObject<CallerAgentScope>): MathHelper {
             `\`Math.${operator}\` must be used inside Agent function`,
           );
         }
-        const stackRef = scope.pushToStack<MathExpression>({
+        const stackRef = scope.addExpression<MathExpression>({
           type: 'math',
           operator,
           x,
@@ -369,7 +379,7 @@ function createVariableHelper(
       if (!scope) {
         throw new Error('`declareVar` must be used inside Agent function');
       }
-      const stackRef = scope.pushToStack<DeclareExpression>({
+      const stackRef = scope.addExpression<DeclareExpression>({
         type: 'declare',
         value: initialValue,
       });
@@ -386,7 +396,7 @@ function createVariableHelper(
         throw new Error('target variable is not assignable');
       }
       const { $$scope: varScope, $$stack: varStack } = variable.toJSON();
-      const stackRef = scope.pushToStack<AssignExpression>({
+      const stackRef = scope.addExpression<AssignExpression>({
         type: 'assign',
         varScope,
         varStack,
@@ -411,7 +421,7 @@ function createCompareHelper(
         if (!scope) {
           throw new Error(`\`${operator}\` must be used inside Agent function`);
         }
-        const stackRef = scope.pushToStack<CompareExpression>({
+        const stackRef = scope.addExpression<CompareExpression>({
           type: 'compare',
           operator,
           x,
@@ -450,7 +460,7 @@ function createValueCheckHelper(
         if (!scope) {
           throw new Error(`\`${operator}\` must be used inside Agent function`);
         }
-        const stackRef = scope.pushToStack<ValueCheckExpression>({
+        const stackRef = scope.addExpression<ValueCheckExpression>({
           type: 'check',
           operator,
           value,
@@ -472,7 +482,7 @@ function createLogicFlowHelper(
       if (!scope) {
         throw new Error('`$if` must be used inside Agent function');
       }
-      const stackRef = scope.pushToStack<IfExpression>({
+      const stackRef = scope.addExpression<IfExpression>({
         type: 'if',
         cond,
         then: createClosure(scopeRef, $then),
