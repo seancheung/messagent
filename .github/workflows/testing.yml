@@ -1,0 +1,20 @@
+name: Tesing
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+jobs:
+  jest_test:
+    name: Jest test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '16.x'
+          cache: npm
+      - run: npm install
+      - run: npm test
+      - uses: coverallsapp/github-action@master
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
