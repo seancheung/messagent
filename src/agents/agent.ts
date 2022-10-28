@@ -143,7 +143,6 @@ export interface StackValue extends IntermediateValue {
 export interface Closure extends IntermediateValue {
   $$type: 'closure';
   $$exps: Expression[];
-  $$async?: boolean;
 }
 
 export function getBrokerMessageType(targetKey: string) {

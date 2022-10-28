@@ -103,9 +103,6 @@ class CalleeAgentScope {
                     parentScope: this,
                     params,
                   });
-                  if (arg.$$async) {
-                    return closure.runAsync(arg.$$exps as MixedExpression[]);
-                  }
                   return closure.runSync(arg.$$exps as SyncExpression[]);
                 };
               }
@@ -251,32 +248,6 @@ class CalleeAgentScope {
       case 'async':
         const target = this.resolveStackValue(exp);
         this.stack.push(await target);
-        break;
-      case 'if':
-        {
-          if (isClosure(exp.then)) {
-            const cond = this.resolveValue(exp.cond);
-            if (cond) {
-              const closure = new CalleeAgentScope({
-                scopeId: this.scopeId + 1,
-                parentScope: this,
-              });
-              if (exp.then.$$async) {
-                await closure.runAsync(exp.then.$$exps as MixedExpression[]);
-              }
-              closure.runSync(exp.then.$$exps as SyncExpression[]);
-            } else if (isClosure(exp.else)) {
-              const closure = new CalleeAgentScope({
-                scopeId: this.scopeId + 1,
-                parentScope: this,
-              });
-              if (exp.else.$$async) {
-                await closure.runAsync(exp.else.$$exps as MixedExpression[]);
-              }
-              closure.runSync(exp.else.$$exps as SyncExpression[]);
-            }
-          }
-        }
         break;
       default:
         this.execSync(exp);

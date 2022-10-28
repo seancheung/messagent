@@ -324,6 +324,7 @@ function createClosure(
   // NOTE: for context hook usage
   let returnValue: any;
   useScope(scopeRef, scope, () => {
+    // NOTE: async not supported
     returnValue = func(...args);
   });
   const returnExp: ReturnExpression = {
@@ -334,7 +335,6 @@ function createClosure(
   const closure: Closure = {
     $$type: 'closure',
     $$exps: scope.syntaxTree,
-    $$async: isPromise(returnValue),
   };
   return closure;
 }
